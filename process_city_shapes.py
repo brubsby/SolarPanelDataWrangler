@@ -25,7 +25,7 @@ def make_megagon():
 # calculated and used in cost/api estimates
 def project_polygons_to_equal_area_projection(polygons):
     projected_polygons = []
-    for polygon in list(megagon):
+    for polygon in polygons:
         projected_polygon = ops.transform(
             functools.partial(
                 pyproj.transform,
@@ -36,7 +36,7 @@ def project_polygons_to_equal_area_projection(polygons):
                     lat2=polygon.bounds[3])),
             polygon)
         projected_polygons.append(projected_polygon)
-
+    return projected_polygons
 
 def save_geojson(filename, feature):
     with open(os.path.join('data', filename), 'w') as outfile:
