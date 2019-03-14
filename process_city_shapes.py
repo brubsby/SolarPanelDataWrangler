@@ -1,13 +1,35 @@
 import argparse
-import functools
 import json
+import math
 import os
+
 import geojson
-import pyproj
-import shapely.ops as ops
-from shapely.geometry import shape, GeometryCollection
+import numpy as np
+from shapely.geometry import shape, mapping, GeometryCollection
 
 from gather_city_shapes import get_city_state_filepaths
+
+
+# function to convert lat lon to slippy tiles
+def deg2num(arr, zoom=20):
+    lat_deg = arr[1]
+    lon_deg = arr[0]
+    lat_rad = np.math.radians(lat_deg)
+    n = 2.0 ** zoom
+    xtile = int((lon_deg + 180.0) / 360.0 * n)
+    ytile = int((1.0 - math.log(math.tan(lat_rad) + (1 / math.cos(lat_rad))) / math.pi) / 2.0 * n)
+    return xtile, ytile
+
+
+# function to convert slippy tiles to lat lon
+def num2deg(arr, zoom=20):
+    xtile = arr[1]
+    ytile = arr[0]
+    n = 2.0 ** zoom
+    lon_deg = xtile / n * 360.0 - 180.0
+    lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * ytile / n)))
+    lat_deg = math.degrees(lat_rad)
+    return lat_deg, lon_deg
 
 
 def get_polygons(csv):
@@ -22,21 +44,13 @@ def make_megagon(csv):
     return GeometryCollection([shape(polygon).convex_hull.simplify(0.001).buffer(0.004) for polygon in get_polygons(csv)])
 
 
-# Project into an equal area space so that approximate total area can be calculated and used in cost/api estimates
-def project_polygons_to_equal_area_projection(polygons):
-    projected_polygons = []
+def convert_to_slippy_tile_coords(polygons, zoom=20):
+    converted_polygons = []
     for polygon in polygons:
-        projected_polygon = ops.transform(
-            functools.partial(
-                pyproj.transform,
-                pyproj.Proj(init='EPSG:3857'),
-                pyproj.Proj(
-                    proj='aea',
-                    lat1=polygon.bounds[1],
-                    lat2=polygon.bounds[3])),
-            polygon)
-        projected_polygons.append(projected_polygon)
-    return projected_polygons
+        geojson = mapping(polygon)
+        geojson['coordinates'] = np.apply_along_axis(deg2num, 2, np.array(geojson['coordinates']), zoom=zoom)
+        converted_polygons.append(shape(geojson))
+    return converted_polygons
 
 
 def save_geojson(filename, feature):
@@ -48,8 +62,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process shapes of city polygons')
     parser.add_argument('--input_csv', dest='csv', default=os.path.join('data', '100k_US_cities.csv'),
                         help='specify the csv list of city and state names to gather geoJSON for')
-    parser.add_argument('--proj_dir', dest='proj_dir', default=None,
-                        help='specify the csv list of city and state names to gather geoJSON for')
     parser.add_argument('--megagon', dest='megagon', action='store_const',
                         const=True, default=False,
                         help='Create the megagon (all of the city polygons combined) and save it')
@@ -58,11 +70,10 @@ if __name__ == '__main__':
                         help='Calculates the area of all polygons in km2')
     args = parser.parse_args()
 
-    if args.proj_dir:
-        pyproj.datadir.set_data_dir(args.proj_dir)
     if args.megagon:
         megagon = make_megagon(args.csv)
         save_geojson('megagon.geojson', megagon)
     if args.area:
-        projected_polygons = project_polygons_to_equal_area_projection(list(make_megagon(args.csv)))
-        print(sum([polygon.area for polygon in projected_polygons]))
+        projected_polygons = convert_to_slippy_tile_coords(list(make_megagon(args.csv)), zoom=20)
+        print(str(math.ceil(sum([polygon.area for polygon in projected_polygons])))
+              + " total API calls to cover this polygon area!")

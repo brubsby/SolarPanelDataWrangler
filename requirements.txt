@@ -1,8 +1,8 @@
-certifi==2019.3.9
-chardet==3.0.4
-geojson==2.4.1
-idna==2.8
-pyproj==2.0.2
-requests==2.21.0
-Shapely==1.6.4.post2
-urllib3==1.24.1
+certifi
+chardet
+geojson
+idna
+numpy
+requests
+Shapely
+urllib3
