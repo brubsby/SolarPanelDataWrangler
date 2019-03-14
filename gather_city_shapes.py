@@ -6,20 +6,6 @@ import csv
 import argparse
 
 
-parser = argparse.ArgumentParser(description='Gather and process shapes of cities from OSM')
-parser.add_argument('--input_csv', dest='csv', default=os.path.join('data', '100k_US_cities.csv'),
-                    help='specify the csv list of city and state names to gather geoJSON for')
-parser.add_argument('--gather', dest='gather', action='store_const',
-                    const=True, default=False,
-                    help='Run the gather portion of this script, which uses the csv input to gather geoJSON shapes '
-                         'from OSM for each city/state pair')
-parser.add_argument('--list_degenerate_cities', dest='degenerate', action='store_const',
-                    const=True, default=False,
-                    help='Run the degenerate shape finding portion of the script, finding shapes that aren\'t polygons')
-
-args = parser.parse_args()
-
-
 # function to convert lat lon to slippy tiles
 def deg2num(lat_deg, lon_deg, zoom):
     lat_rad = math.radians(lat_deg)
@@ -42,8 +28,8 @@ def get_filename(city, state):
     return city.replace(' ', '_') + '.' + state.replace(' ', '_') + '.json'
 
 
-def get_city_state_tuples():
-    with open(args.csv) as csvfile:
+def get_city_state_tuples(csvpath):
+    with open(csvpath, 'r') as csvfile:
         reader = csv.reader(csvfile, skipinitialspace=True)
         for row in reader:
             city = row[0]
@@ -51,13 +37,13 @@ def get_city_state_tuples():
             yield city, state
 
 
-def get_city_state_filepaths():
-    for city, state in get_city_state_tuples():
+def get_city_state_filepaths(csvpath):
+    for city, state in get_city_state_tuples(csvpath):
         yield city, state, os.path.join('data', 'geoJSON', get_filename(city, state))
 
 
-def gather():
-    for city, state, filepath in get_city_state_filepaths():
+def gather(csvpath):
+    for city, state, filepath in get_city_state_filepaths(csvpath):
         if not os.path.isfile(filepath):
             response = requests.get(
                 "https://nominatim.openstreetmap.org/search?city=" + city + "&state=" + state
@@ -69,8 +55,8 @@ def gather():
 # These cities are hard to programmatically get for some reason or another, so you have to use the method here to fix
 # your data by hand:
 # https://gis.stackexchange.com/questions/183248/getting-polygon-boundaries-of-city-in-json-from-google-maps-api
-def get_degenerate_cities():
-    for city, state, filepath in get_city_state_filepaths():
+def get_degenerate_cities(csvpath):
+    for city, state, filepath in get_city_state_filepaths(csvpath):
         if os.path.isfile(filepath):
             with open(filepath, 'r') as infile:
                 json_dict = json.load(infile)
@@ -79,8 +65,20 @@ def get_degenerate_cities():
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Gather and process shapes of cities from OSM')
+    parser.add_argument('--input_csv', dest='csv', default=os.path.join('data', '100k_US_cities.csv'),
+                        help='specify the csv list of city and state names to gather geoJSON for')
+    parser.add_argument('--gather', dest='gather', action='store_const',
+                        const=True, default=False,
+                        help='Run the gather portion of this script, which uses the csv input to gather geoJSON shapes'
+                             'from OSM for each city/state pair')
+    parser.add_argument('--list_degenerate_cities', dest='degenerate', action='store_const',
+                        const=True, default=False,
+                        help='Run the degenerate shape finding portion of the script, finding shapes that aren\'t polygons')
+    args = parser.parse_args()
+
     if args.gather:
-        gather()
+        gather(args.csv)
     if args.degenerate:
-        for city, state in get_degenerate_cities():
+        for city, state in get_degenerate_cities(args.csv):
             print(city + ' ' + state)
