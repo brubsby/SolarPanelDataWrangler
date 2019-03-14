@@ -6,3 +6,4 @@ numpy
 requests
 Shapely
 urllib3
+sqlalchemy

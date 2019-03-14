@@ -2,10 +2,14 @@ import argparse
 import json
 import math
 import os
+import pickle
+import time
+import sqlite3
+import sqlalchemy
 
 import geojson
 import numpy as np
-from shapely.geometry import shape, mapping, GeometryCollection
+from shapely.geometry import shape, mapping, GeometryCollection, Point
 
 from gather_city_shapes import get_city_state_filepaths
 
@@ -58,6 +62,32 @@ def save_geojson(filename, feature):
         geojson.dump(geojson.Feature(geometry=feature, properties={}), outfile)
 
 
+# function required to call apply_along_axis and get a boolean mask
+def point_mapper(x):
+    return not polygon.contains(Point((x[0], x[1])))
+
+
+# This method takes a while, possibly need to multiprocess (1 cpu is maxed out on my machine) or switch to matplotlib
+# for possibly more efficient code:
+# https://stackoverflow.com/questions/21339448/how-to-get-list-of-points-inside-a-polygon-in-python
+def get_coords_inside_polygon(polygon):
+    # get a meshgrid the size of the polygon's bounding box
+    x, y = np.meshgrid(np.arange(polygon.bounds[0], polygon.bounds[2]), np.arange(polygon.bounds[1], polygon.bounds[3]))
+
+    # convert the meshgrid to an array of points
+    x, y = x.flatten(), y.flatten()
+    points = np.vstack((x, y)).T
+
+    # calculate if the polygon contains every point
+    mask = np.apply_along_axis(point_mapper, 1, points)
+
+    # stack the mask so each boolean value gets propagated to both coords
+    mask = np.hstack((mask, mask))
+
+    # delete the points outside the polygon and return
+    return np.ma.masked_array(points, mask=mask).compressed()
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process shapes of city polygons')
     parser.add_argument('--input_csv', dest='csv', default=os.path.join('data', '100k_US_cities.csv'),
@@ -68,12 +98,26 @@ if __name__ == '__main__':
     parser.add_argument('--calculate_area', dest='area', action='store_const',
                         const=True, default=False,
                         help='Calculates the area of all polygons in km2')
+    parser.add_argument('--calculate_inner_grid', dest='inner', action='store_const',
+                        const=True, default=False,
+                        help='Calculates every slippy coordinate that\'s within a polygon, '
+                             'currently takes a very long time')
     args = parser.parse_args()
 
     if args.megagon:
         megagon = make_megagon(args.csv)
         save_geojson('megagon.geojson', megagon)
     if args.area:
-        projected_polygons = convert_to_slippy_tile_coords(list(make_megagon(args.csv)), zoom=20)
+        projected_polygons = convert_to_slippy_tile_coords(list(make_megagon(args.csv)), zoom=18)
         print(str(math.ceil(sum([polygon.area for polygon in projected_polygons])))
               + " total API calls to cover this polygon area!")
+    if args.inner:
+        start = time.time()
+        coords = []
+        for polygon in convert_to_slippy_tile_coords(list(make_megagon(args.csv))):
+            before = time.time()
+            coords.append(get_coords_inside_polygon(polygon))
+            print(time.time()-before)
+        # TODO create sqlite db to save all these points to so we can persist what we've queried
+        # TODO also persist relation to polygon (i.e. city) and distance to centroid for sorting within rdms
+        print(time.time()-start)
