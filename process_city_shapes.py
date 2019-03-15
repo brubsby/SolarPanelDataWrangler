@@ -5,6 +5,9 @@ import os
 import pickle
 import time
 import sqlite3
+import geopandas
+
+import geojsonio as geojsonio
 import sqlalchemy
 
 import geojson
@@ -102,15 +105,21 @@ if __name__ == '__main__':
                         const=True, default=False,
                         help='Calculates every slippy coordinate that\'s within a polygon, '
                              'currently takes a very long time')
+    parser.add_argument('--geojsonio', dest='geojsonio', action='store_const',
+                        const=True, default=False,
+                        help='Opens processing output in geojsonio if the operation makes sense')
     args = parser.parse_args()
 
+    output = None
     if args.megagon:
         megagon = make_megagon(args.csv)
         save_geojson('megagon.geojson', megagon)
+        output = megagon
     if args.area:
-        projected_polygons = convert_to_slippy_tile_coords(list(make_megagon(args.csv)), zoom=18)
+        projected_polygons = convert_to_slippy_tile_coords(list(make_megagon(args.csv)), zoom=20)
         print(str(math.ceil(sum([polygon.area for polygon in projected_polygons])))
               + " total API calls to cover this polygon area!")
+        output = projected_polygons
     if args.inner:
         start = time.time()
         coords = []
@@ -121,3 +130,6 @@ if __name__ == '__main__':
         # TODO create sqlite db to save all these points to so we can persist what we've queried
         # TODO also persist relation to polygon (i.e. city) and distance to centroid for sorting within rdms
         print(time.time()-start)
+    if args.geojsonio and output is not None:
+        geojsonio.display(geopandas.GeoSeries(output))
+
