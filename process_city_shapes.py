@@ -30,8 +30,8 @@ def deg2num(arr, zoom=20):
 
 # function to convert slippy tiles to lat lon
 def num2deg(arr, zoom=20):
-    xtile = arr[1]
-    ytile = arr[0]
+    xtile = arr[0]
+    ytile = arr[1]
     n = 2.0 ** zoom
     lon_deg = xtile / n * 360.0 - 180.0
     lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * ytile / n)))
