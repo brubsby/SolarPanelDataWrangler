@@ -1,7 +1,7 @@
 import math
 import time
 
-from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean
+from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, PrimaryKeyConstraint
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
@@ -24,15 +24,22 @@ class SearchPolygon(Base):
 class SlippyTile(Base):
     __tablename__ = 'slippy_tiles'
 
-    row = Column(Integer, nullable=False, primary_key=True)
-    column = Column(Integer, nullable=False, primary_key=True)
-    zoom = Column(Integer, nullable=False, primary_key=True)
+    row = Column(Integer, nullable=False)
+    column = Column(Integer, nullable=False)
+    zoom = Column(Integer, nullable=False)
     centroid_distance = Column(Float)
     polygon_name = Column(String, ForeignKey('search_polygons.name'))
     polygon = relationship("SearchPolygon")
     has_image = Column(Boolean, nullable=False, server_default=expression.false())
     inference_ran = Column(Boolean, nullable=False, server_default=expression.false())
     inference_timestamp = Column(Integer, nullable=True)  # UNIX EPOCH
+    panel_softmax = Column(Float, nullable=True)
+    panel_seen_by_human = Column(Boolean, nullable=True, server_default=expression.false())
+    panel_verified = Column(Boolean, nullable=True, server_default=expression.false())
+
+    __table_args__ = (
+        PrimaryKeyConstraint(row, column, zoom, sqlite_on_conflict='IGNORE'),
+    )
 
 
 engine = create_engine('sqlite:///data/solar.db')
@@ -56,11 +63,7 @@ def persist_coords(polygon_name, coords, zoom=20):
     session = Session()
     tiles_to_add = []
     for coord in coords:
-        tile_to_add = SlippyTile(polygon_name=polygon_name, row=coord[0], column=coord[1], zoom=zoom)
-        exists = session.query(SlippyTile).filter(SlippyTile.zoom == tile_to_add.zoom).filter(
-            SlippyTile.row == tile_to_add.row).filter(SlippyTile.column == tile_to_add.column).first()
-        if not exists:
-            tiles_to_add.append(tile_to_add)
+        tiles_to_add.append(SlippyTile(polygon_name=polygon_name, row=coord[0], column=coord[1], zoom=zoom))
     session.add_all(tiles_to_add)
     session.query(SearchPolygon).filter(SearchPolygon.name == polygon_name).first().inner_coords_calculated = True
     session.commit()

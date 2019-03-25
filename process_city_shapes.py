@@ -16,8 +16,8 @@ from gather_city_shapes import get_city_state_filepaths, get_city_state_tuples
 
 # function to convert lat lon to slippy tiles
 def deg2num(arr, zoom=20):
-    lat_deg = arr[1]
     lon_deg = arr[0]
+    lat_deg = arr[1]
     lat_rad = np.math.radians(lat_deg)
     n = 2.0 ** zoom
     xtile = int((lon_deg + 180.0) / 360.0 * n)
@@ -33,7 +33,7 @@ def num2deg(arr, zoom=20):
     lon_deg = xtile / n * 360.0 - 180.0
     lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * ytile / n)))
     lat_deg = math.degrees(lat_rad)
-    return lat_deg, lon_deg
+    return lon_deg, lat_deg
 
 
 def get_polygons(csvpath, exclude=None):
