@@ -1,10 +1,11 @@
 import time
 
-from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, PrimaryKeyConstraint
+from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.schema import CreateTable
+
+from sqlalchemy.sql import expression
 
 Base = declarative_base()
 
@@ -16,7 +17,7 @@ class SearchPolygon(Base):
     centroid_row = Column(Float, nullable=False)
     centroid_column = Column(Float, nullable=False)
     centroid_zoom = Column(Integer, nullable=False)
-    inner_coords_calculated = Column(Boolean, nullable=False, default=False)
+    inner_coords_calculated = Column(Boolean, nullable=False, server_default=expression.false())
 
 
 class SlippyTile(Base):
@@ -27,6 +28,9 @@ class SlippyTile(Base):
     zoom = Column(Integer, nullable=False, primary_key=True)
     centroid_distance = Column(Float)
     polygon_name = Column(String, ForeignKey('search_polygons.name'))
+    has_image = Column(Boolean, nullable=False, server_default=expression.false())
+    inference_ran = Column(Boolean, nullable=False, server_default=expression.false())
+    inference_timestamp = Column(Integer, nullable=True)  # UNIX EPOCH
 
 
 engine = create_engine('sqlite:///data/solar.db')
