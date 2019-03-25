@@ -48,7 +48,7 @@ def get_degenerate_cities(csvpath):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Gather and process shapes of cities from OSM')
-    parser.add_argument('--input_csv', dest='csv', default=os.path.join('data', '100k_US_cities.csv'),
+    parser.add_argument('--input_csv', dest='csvpath', default=os.path.join('data', '100k_US_cities.csv'),
                         help='specify the csv list of city and state names to gather geoJSON for')
     parser.add_argument('--gather', dest='gather', action='store_const',
                         const=True, default=False,
@@ -60,7 +60,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.gather:
-        gather(args.csv)
+        gather(args.csvpath)
     if args.degenerate:
-        for city, state in get_degenerate_cities(args.csv):
+        for city, state in get_degenerate_cities(args.csvpath):
             print(city + ' ' + state)

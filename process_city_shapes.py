@@ -2,19 +2,15 @@ import argparse
 import json
 import math
 import os
-import pickle
 import time
-import sqlite3
-import geopandas
-
-import geojsonio as geojsonio
-import sqlalchemy
 
 import geojson
+import geojsonio as geojsonio
+import geopandas
 import numpy as np
 from shapely.geometry import shape, mapping, GeometryCollection, Point
 
-from gather_city_shapes import get_city_state_filepaths
+from gather_city_shapes import get_city_state_filepaths, get_city_state_tuples
 
 
 # function to convert lat lon to slippy tiles
@@ -39,16 +35,21 @@ def num2deg(arr, zoom=20):
     return lat_deg, lon_deg
 
 
-def get_polygons(csv):
-    for _, _, filepath in get_city_state_filepaths(csv):
-        with open(filepath, 'r') as infile:
-            yield json.load(infile)
+def get_polygons(csvpath, exclude=None):
+    if exclude is None:
+        exclude = []
+    for city, state, filepath in get_city_state_filepaths(csvpath):
+        name_string = ", ".join((city, state))
+        if name_string not in exclude:
+            with open(filepath, 'r') as infile:
+                yield json.load(infile)
 
 
 # For decreased computational complexity I run some simplification of the polygons gathered before putting them all
 # together into one collection, because these shapes are just a starting point and pretty arbitrary
-def make_megagon(csv):
-    return GeometryCollection([shape(polygon).convex_hull.simplify(0.001).buffer(0.004) for polygon in get_polygons(csv)])
+def make_megagon(csvpath, exclude=None):
+    return GeometryCollection([shape(polygon).convex_hull.simplify(0.001).buffer(0.004) for polygon in get_polygons(
+        csvpath, exclude=exclude)])
 
 
 def convert_to_slippy_tile_coords(polygons, zoom=20):
@@ -66,7 +67,7 @@ def save_geojson(filename, feature):
 
 
 # function required to call apply_along_axis and get a boolean mask
-def point_mapper(x):
+def point_mapper(x, polygon=None):
     return not polygon.contains(Point((x[0], x[1])))
 
 
@@ -82,18 +83,25 @@ def get_coords_inside_polygon(polygon):
     points = np.vstack((x, y)).T
 
     # calculate if the polygon contains every point
-    mask = np.apply_along_axis(point_mapper, 1, points)
+    mask = np.apply_along_axis(point_mapper, 1, points, polygon=polygon)
 
     # stack the mask so each boolean value gets propagated to both coords
-    mask = np.hstack((mask, mask))
+    mask = np.stack((mask, mask), axis=1)
 
     # delete the points outside the polygon and return
-    return np.ma.masked_array(points, mask=mask).compressed()
+    return np.ma.masked_array(points, mask=mask).compressed().reshape((-1, 2))
+
+
+def get_coords_caller(name, polygon):
+    start_time = time.time()
+    coordinates = get_coords_inside_polygon(polygon)
+    print(str(time.time() - start_time) + " seconds to complete inner grid calculations for " + name)
+    return coordinates
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process shapes of city polygons')
-    parser.add_argument('--input_csv', dest='csv', default=os.path.join('data', '100k_US_cities.csv'),
+    parser.add_argument('--input_csv', dest='csvpath', default=os.path.join('data', '100k_US_cities.csv'),
                         help='specify the csv list of city and state names to gather geoJSON for')
     parser.add_argument('--megagon', dest='megagon', action='store_const',
                         const=True, default=False,
@@ -112,24 +120,33 @@ if __name__ == '__main__':
 
     output = None
     if args.megagon:
-        megagon = make_megagon(args.csv)
+        megagon = make_megagon(args.csvpath)
         save_geojson('megagon.geojson', megagon)
         output = megagon
     if args.area:
-        projected_polygons = convert_to_slippy_tile_coords(list(make_megagon(args.csv)), zoom=20)
+        projected_polygons = convert_to_slippy_tile_coords(list(make_megagon(args.csvpath)), zoom=20)
         print(str(math.ceil(sum([polygon.area for polygon in projected_polygons])))
               + " total API calls to cover this polygon area!")
         output = projected_polygons
     if args.inner:
         start = time.time()
-        coords = []
-        for polygon in convert_to_slippy_tile_coords(list(make_megagon(args.csv))):
-            before = time.time()
-            coords.append(get_coords_inside_polygon(polygon))
-            print(time.time()-before)
-        # TODO create sqlite db to save all these points to so we can persist what we've queried
-        # TODO also persist relation to polygon (i.e. city) and distance to centroid for sorting within rdms
-        print(time.time()-start)
+        # possibly replace with importlib lazy loading if this becomes unwieldy
+        import solardb
+
+        slippy_tile_coordinates = list(convert_to_slippy_tile_coords(
+            list(make_megagon(args.csvpath, exclude=solardb.get_finished_polygon_names()))))
+        city_state_tuples = list(get_city_state_tuples(args.csvpath))
+        assert (len(city_state_tuples) == len(slippy_tile_coordinates))  # make sure no length mismatch
+        zipped_names_and_polygons = list(zip([', '.join(city_state_tuple) for city_state_tuple in city_state_tuples],
+                                             slippy_tile_coordinates))
+        solardb.persist_polygons(zipped_names_and_polygons)
+        to_calculate_names_and_polygons = []
+        for name, polygon in zipped_names_and_polygons:
+            if not solardb.polygon_has_inner_grid(name):
+                to_calculate_names_and_polygons.append((name, polygon))
+        for name, polygon in to_calculate_names_and_polygons:
+            coordinates = get_coords_caller(name, polygon)
+            solardb.persist_coords(name, coordinates)
+        print(time.time() - start)
     if args.geojsonio and output is not None:
         geojsonio.display(geopandas.GeoSeries(output))
-

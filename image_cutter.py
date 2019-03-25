@@ -20,9 +20,11 @@ def retinize(image, filter=Image.LANCZOS):
 
 
 if __name__=='__main__':
+    retinize(Image.open(os.path.join('data', 'api_samples', '18x1280x1280@2x.jpeg'))).save(
+        os.path.join('data', 'api_samples', '18x1280x1280x4.jpeg'))
     image_slicer.save_tiles(image_slicer.slice(
-        os.path.join('data', 'api_samples', '18x1280x1280@2x.jpeg'), 100, save=False),
-        directory=os.path.join('data', 'api_samples', 'split'), prefix='18x1280x1280@2x.jpeg')
+        os.path.join('data', 'api_samples', '18x1280x1280x4.jpeg'), 400, save=False),
+        directory=os.path.join('data', 'api_samples', 'split'), prefix='18x1280x1280x4.jpeg')
     image_slicer.save_tiles(image_slicer.slice(
         os.path.join('data', 'api_samples', '19x1280x1280@2x.jpeg'), 100, save=False),
         directory=os.path.join('data', 'api_samples', 'split'), prefix='19x1280x1280@2x.jpeg')
