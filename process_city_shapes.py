@@ -2,6 +2,7 @@ import argparse
 import json
 import math
 import os
+import sys
 import time
 
 import geojson
@@ -113,6 +114,9 @@ if __name__ == '__main__':
                         const=True, default=False,
                         help='Calculates every slippy coordinate that\'s within a polygon, '
                              'currently takes a very long time')
+    parser.add_argument('--calculate_centroids', dest='centroids', action='store_const',
+                        const=True, default=False,
+                        help='Calculates missing centroids in the database')
     parser.add_argument('--geojsonio', dest='geojsonio', action='store_const',
                         const=True, default=False,
                         help='Opens processing output in geojsonio if the operation makes sense')
@@ -148,5 +152,9 @@ if __name__ == '__main__':
             coordinates = get_coords_caller(name, polygon)
             solardb.persist_coords(name, coordinates)
         print(time.time() - start)
+    if args.centroids:
+        if 'solardb' not in sys.modules:
+            import solardb
+        solardb.compute_centroids()
     if args.geojsonio and output is not None:
         geojsonio.display(geopandas.GeoSeries(output))

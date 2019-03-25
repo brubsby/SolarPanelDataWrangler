@@ -1,9 +1,10 @@
+import math
 import time
 
 from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, relationship
 
 from sqlalchemy.sql import expression
 
@@ -28,6 +29,7 @@ class SlippyTile(Base):
     zoom = Column(Integer, nullable=False, primary_key=True)
     centroid_distance = Column(Float)
     polygon_name = Column(String, ForeignKey('search_polygons.name'))
+    polygon = relationship("SearchPolygon")
     has_image = Column(Boolean, nullable=False, server_default=expression.false())
     inference_ran = Column(Boolean, nullable=False, server_default=expression.false())
     inference_timestamp = Column(Integer, nullable=True)  # UNIX EPOCH
@@ -78,3 +80,16 @@ def polygon_has_inner_grid(name):
     inner_grid = session.query(SearchPolygon.inner_coords_calculated).filter(SearchPolygon.name == name).first()[0]
     session.close()
     return inner_grid
+
+
+def compute_centroids(batch_size=10000):
+    session = Session()
+    while True:
+        uncomputed_centroid_tiles = session.query(SlippyTile).filter(
+            SlippyTile.centroid_distance.is_(None)).limit(batch_size).all()
+        if not uncomputed_centroid_tiles:
+            break
+        for tile in uncomputed_centroid_tiles:
+            tile.centroid_distance = math.sqrt(math.pow(tile.polygon.centroid_row - tile.row, 2) + math.pow(tile.polygon.centroid_column - tile.column, 2))
+        session.commit()
+    session.close()
