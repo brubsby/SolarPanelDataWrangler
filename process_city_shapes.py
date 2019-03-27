@@ -15,23 +15,26 @@ from gather_city_shapes import get_city_state_filepaths, get_city_state_tuples
 
 
 # function to convert lat lon to slippy tiles
-def deg2num(arr, zoom=20):
+def deg2num(arr, zoom=21):
     lon_deg = arr[0]
     lat_deg = arr[1]
     lat_rad = np.math.radians(lat_deg)
     n = 2.0 ** zoom
-    xtile = int((lon_deg + 180.0) / 360.0 * n)
-    ytile = int((1.0 - math.log(math.tan(lat_rad) + (1 / math.cos(lat_rad))) / math.pi) / 2.0 * n)
-    return xtile, ytile
+    column = int((lon_deg + 180.0) / 360.0 * n)
+    row = int((1.0 - math.log(math.tan(lat_rad) + (1 / math.cos(lat_rad))) / math.pi) / 2.0 * n)
+    return column, row
 
 
 # function to convert slippy tiles to lat lon
-def num2deg(arr, zoom=20):
-    xtile = arr[0]
-    ytile = arr[1]
+def num2deg(arr, zoom=21, center=True):
+    column = arr[0]
+    row = arr[1]
+    if center:
+        column += 0.5
+        row += 0.5
     n = 2.0 ** zoom
-    lon_deg = xtile / n * 360.0 - 180.0
-    lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * ytile / n)))
+    lon_deg = column / n * 360.0 - 180.0
+    lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * row / n)))
     lat_deg = math.degrees(lat_rad)
     return lon_deg, lat_deg
 
@@ -53,7 +56,7 @@ def make_megagon(csvpath, exclude=None):
         csvpath, exclude=exclude)])
 
 
-def convert_to_slippy_tile_coords(polygons, zoom=20):
+def convert_to_slippy_tile_coords(polygons, zoom=21):
     converted_polygons = []
     for polygon in polygons:
         geojson = mapping(polygon)
@@ -100,6 +103,28 @@ def get_coords_caller(name, polygon):
     return coordinates
 
 
+def calculate_inner_coordinates(zoom=21):
+    start = time.time()
+    # possibly replace with importlib lazy loading if this becomes unwieldy
+    import solardb
+
+    slippy_tile_coordinates = list(convert_to_slippy_tile_coords(
+        list(make_megagon(args.csvpath, exclude=solardb.get_finished_polygon_names())), zoom=zoom))
+    city_state_tuples = list(get_city_state_tuples(args.csvpath))
+    assert (len(city_state_tuples) == len(slippy_tile_coordinates))  # make sure no length mismatch
+    zipped_names_and_polygons = list(zip([', '.join(city_state_tuple) for city_state_tuple in city_state_tuples],
+                                         slippy_tile_coordinates))
+    solardb.persist_polygons(zipped_names_and_polygons, zoom=zoom)
+    to_calculate_names_and_polygons = []
+    for name, polygon in zipped_names_and_polygons:
+        if not solardb.polygon_has_inner_grid(name):
+            to_calculate_names_and_polygons.append((name, polygon))
+    for name, polygon in to_calculate_names_and_polygons:
+        coordinates = get_coords_caller(name, polygon)
+        solardb.persist_coords(name, coordinates, zoom=zoom)
+    print(time.time() - start)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process shapes of city polygons')
     parser.add_argument('--input_csv', dest='csvpath', default=os.path.join('data', '100k_US_cities.csv'),
@@ -128,30 +153,12 @@ if __name__ == '__main__':
         save_geojson('megagon.geojson', megagon)
         output = megagon
     if args.area:
-        projected_polygons = convert_to_slippy_tile_coords(list(make_megagon(args.csvpath)), zoom=20)
+        projected_polygons = convert_to_slippy_tile_coords(list(make_megagon(args.csvpath)), zoom=21)
         print(str(math.ceil(sum([polygon.area for polygon in projected_polygons])))
               + " total API calls to cover this polygon area!")
         output = projected_polygons
     if args.inner:
-        start = time.time()
-        # possibly replace with importlib lazy loading if this becomes unwieldy
-        import solardb
-
-        slippy_tile_coordinates = list(convert_to_slippy_tile_coords(
-            list(make_megagon(args.csvpath, exclude=solardb.get_finished_polygon_names()))))
-        city_state_tuples = list(get_city_state_tuples(args.csvpath))
-        assert (len(city_state_tuples) == len(slippy_tile_coordinates))  # make sure no length mismatch
-        zipped_names_and_polygons = list(zip([', '.join(city_state_tuple) for city_state_tuple in city_state_tuples],
-                                             slippy_tile_coordinates))
-        solardb.persist_polygons(zipped_names_and_polygons)
-        to_calculate_names_and_polygons = []
-        for name, polygon in zipped_names_and_polygons:
-            if not solardb.polygon_has_inner_grid(name):
-                to_calculate_names_and_polygons.append((name, polygon))
-        for name, polygon in to_calculate_names_and_polygons:
-            coordinates = get_coords_caller(name, polygon)
-            solardb.persist_coords(name, coordinates)
-        print(time.time() - start)
+        calculate_inner_coordinates(zoom=21)
     if args.centroids:
         if 'solardb' not in sys.modules:
             import solardb

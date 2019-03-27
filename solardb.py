@@ -47,7 +47,7 @@ Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 
 
-def persist_polygons(names_and_polygons, zoom=20):
+def persist_polygons(names_and_polygons, zoom=21):
     session = Session()
     for name, polygon in names_and_polygons:
         exists = session.query(SearchPolygon).filter(SearchPolygon.name == name).first()
@@ -58,12 +58,16 @@ def persist_polygons(names_and_polygons, zoom=20):
     session.close()
 
 
-def persist_coords(polygon_name, coords, zoom=20):
+def persist_coords(polygon_name, coords, zoom=21, batch_size=100000):
     start_time = time.time()
     session = Session()
     tiles_to_add = []
     for coord in coords:
-        tiles_to_add.append(SlippyTile(polygon_name=polygon_name, row=coord[0], column=coord[1], zoom=zoom))
+        if len(tiles_to_add) >= batch_size:
+            session.add_all(tiles_to_add)
+            session.commit()
+            tiles_to_add = []
+        tiles_to_add.append(SlippyTile(polygon_name=polygon_name, column=coord[0], row=coord[1], zoom=zoom))
     session.add_all(tiles_to_add)
     session.query(SearchPolygon).filter(SearchPolygon.name == polygon_name).first().inner_coords_calculated = True
     session.commit()
@@ -93,6 +97,17 @@ def compute_centroids(batch_size=10000):
         if not uncomputed_centroid_tiles:
             break
         for tile in uncomputed_centroid_tiles:
-            tile.centroid_distance = math.sqrt(math.pow(tile.polygon.centroid_row - tile.row, 2) + math.pow(tile.polygon.centroid_column - tile.column, 2))
+            tile.centroid_distance = math.sqrt(
+                math.pow(tile.polygon.centroid_row - tile.row, 2) + math.pow(tile.polygon.centroid_column - tile.column,
+                                                                             2))
         session.commit()
+    session.close()
+
+
+def mark_has_imagery(base_coord, grid_size, zoom=21):
+    session = Session()
+    session.query(SlippyTile).filter(SlippyTile.zoom == zoom).filter(SlippyTile.column.between(
+        base_coord[0], base_coord[0] + grid_size)).filter(SlippyTile.row.between(
+        base_coord[1], base_coord[1] + grid_size)).update({SlippyTile.has_image: True}, synchronize_session='fetch')
+    session.commit()
     session.close()
