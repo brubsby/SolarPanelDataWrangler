@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.sql import expression
 
 Base = declarative_base()
+# TODO improve session management
 
 
 class SearchPolygon(Base):
@@ -105,6 +106,7 @@ def compute_centroids(batch_size=10000):
 
 
 def mark_has_imagery(base_coord, grid_size, zoom=21):
+    # TODO add slippytile in database if it does not exist
     session = Session()
     session.query(SlippyTile).filter(SlippyTile.zoom == zoom).filter(SlippyTile.column.between(
         base_coord[0], base_coord[0] + grid_size)).filter(SlippyTile.row.between(
