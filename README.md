@@ -18,11 +18,13 @@ Next, process_city_shapes.py contains a number of ways to perform operations on 
 solardb.py contains an ORM for the database object that is currently SQLite, along with some helper functions to aid persistence. I also have started tracking data migrates via alembic, and I'm not sure how well my migrates work for new users, so please leave an issue if you're having trouble with the configuration and I'll try to help.
 
 The next steps are to:
-- map the coordinate database to the mapbox API, and to properly queue, slice up, and persist satelitte images until they can have inference run on them (in progress)
+- ~~map the coordinate database to the mapbox API, and to properly queue, slice up, and persist satelitte images until they can have inference run on them~~ (mostly done, still need a good method to systematically queue, but not top priority)
+- ~~implement preprocessing to stitch images together~~ (prototype done, could be improved)
 - modify [DeepSolar](https://github.com/typicalTYLER/DeepSolar) to run inference on arbitrary tile batches (currently just runs on test set)
 - query OSM existing solar panel locations to exclude from results
-- do something with the results
-- parallelize slower parts of this code (I've tride to paralellize the inner grid calculation and persistence but after much effort it was still not working correctly)
+- do something with the results (pass to human verification system, post spreadsheet of locations, etc.)
+- optimize slower parts of this code (I've tride to paralellize the inner grid calculation and persistence but after much effort it was still not working correctly)
+- fix SQLAlchemy connection/session handling so not as many are created
 - possibly gather imagery from different sources if mapbox is too rate limited
 
 # Contributing
