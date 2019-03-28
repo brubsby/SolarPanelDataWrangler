@@ -23,10 +23,10 @@ The next steps are to:
 - modify [DeepSolar](https://github.com/typicalTYLER/DeepSolar) to run inference on arbitrary tile batches (currently just runs on test set)
 - query OSM existing solar panel locations to exclude from results
 - do something with the results (pass to human verification system, post spreadsheet of locations, etc.)
-- optimize slower parts of this code (I've tride to paralellize the inner grid calculation and persistence but after much effort it was still not working correctly)
+- optimize slower parts of this code (I've tried to parallelize the inner grid calculation and persistence but after much effort it was still not working correctly)
 - fix SQLAlchemy connection/session handling so not as many are created
 - possibly gather imagery from different sources if mapbox is too rate limited
 
 # Contributing
 
-Feel free to submit pull requests if you want to add a feature or optimize the code! I'm also down to add other Open Climate Fix collaborators as collaborators on this repo.
+Feel free to sign up for and submit pull requests for one of the [existing issues](https://github.com/typicalTYLER/SolarPanelDataWrangler/issues) if you want to contribute! I'm also down to add other Open Climate Fix collaborators as collaborators on this repo. Also feel free to create issues if you are having trouble with anything in this repo.
