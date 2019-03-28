@@ -105,11 +105,32 @@ def compute_centroids(batch_size=10000):
     session.close()
 
 
+# marks existing slippy tiles as having imagery in the db, and if the tiles don't exist it creates them (for cases where
+# the imagery gathered goes outside the planned polygon bounds, still need to track it, and maybe use it)
 def mark_has_imagery(base_coord, grid_size, zoom=21):
-    # TODO add slippytile in database if it does not exist
     session = Session()
-    session.query(SlippyTile).filter(SlippyTile.zoom == zoom).filter(SlippyTile.column.between(
-        base_coord[0], base_coord[0] + grid_size)).filter(SlippyTile.row.between(
-        base_coord[1], base_coord[1] + grid_size)).update({SlippyTile.has_image: True}, synchronize_session='fetch')
+    # get and update the tiles in this grid that exist
+    tile_query = session.query(SlippyTile).filter(SlippyTile.zoom == zoom).filter(SlippyTile.column.between(
+        base_coord[0], base_coord[0] + grid_size - 1)).filter(SlippyTile.row.between(base_coord[1], base_coord[1] +
+                                                                                     grid_size - 1))
+    tile_query.update({SlippyTile.has_image: True}, synchronize_session='fetch')
+    tiles = tile_query.all()
+    # get the first tile's parent polygon if they have one
+    polygon_name = next(iter(tiles or []), None).polygon_name
+
+    # create a meshgrid of points in this grid
+    coords = {}
+    for column in range(base_coord[0], base_coord[0] + 20):
+        for row in range(base_coord[1], base_coord[1] + 20):
+            coords[(column, row)] = True
+    # remove the tiles that we already know exist
+    for tile in tiles:
+        coords.pop((tile.column, tile.row), None)
+    tiles_to_add = []
+    # create new tile objects for the remaining points in the meshgrid and add them to the db
+    for coord in coords.keys():
+        tiles_to_add.append(SlippyTile(column=coord[0], row=coord[1], zoom=zoom, polygon_name=polygon_name,
+                                       has_image=True))
+    session.add_all(tiles_to_add)
     session.commit()
     session.close()
