@@ -27,11 +27,18 @@ def get_city_state_filepaths(csvpath):
 def gather(csvpath):
     for city, state, filepath in get_city_state_filepaths(csvpath):
         if not os.path.isfile(filepath):
-            response = requests.get(
-                "https://nominatim.openstreetmap.org/search?city=" + city + "&state=" + state
-                + "&polygon_geojson=1&format=json")
-            with open(filepath, 'w') as outfile:
-                json.dump(response.json()[0]['geojson'], outfile)
+                with open(filepath, 'w') as outfile:
+                    json.dump(query_nominatim_for_geojson(city, state), outfile)
+
+
+def query_nominatim_for_geojson(city, state):
+    response = requests.get(
+        "https://nominatim.openstreetmap.org/search?city=" + city + "&state=" + state
+        + "&polygon_geojson=1&format=json")
+    if response.ok:
+            return response.json()[0]['geojson']
+    else:
+        raise ConnectionError(response.content)
 
 
 # These cities are hard to programmatically get for some reason or another, so you have to use the method here to fix

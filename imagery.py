@@ -133,7 +133,7 @@ def gather_and_persist_imagery_at_coordinate(slippy_coordinates, final_zoom=FINA
             solardb.mark_has_imagery(base_coords, grid_size, zoom=final_zoom)
             return to_return
         else:
-            raise Exception(response.content)
+            raise ConnectionError(response.content)
     else:
         AttributeError("Unsupported Imagery source: " + str(imagery))
 
