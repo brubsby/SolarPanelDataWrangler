@@ -159,7 +159,7 @@ if __name__ == '__main__':
     if args.area:
         projected_polygons = convert_to_slippy_tile_coords(list(combine_all_polygons(args.csvpath)), zoom=21)
         print(str(math.ceil(sum([polygon.area for polygon in projected_polygons])))
-              + " total API calls to cover this polygon area!")
+              + " total tiles at zoom level " + str(21) + " in this multipolygon area!")
         output = projected_polygons
     if args.inner:
         calculate_inner_coordinates(zoom=21)
