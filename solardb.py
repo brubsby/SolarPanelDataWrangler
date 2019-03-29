@@ -66,7 +66,7 @@ def persist_polygons(names_and_polygons, zoom=21):
     for name, polygon in names_and_polygons:
         exists = session.query(SearchPolygon).filter(SearchPolygon.name == name).first()
         if not exists:
-            session.add(SearchPolygon(name=name, centroid_row=polygon.centroid.x, centroid_column=polygon.centroid.y,
+            session.add(SearchPolygon(name=name, centroid_column=polygon.centroid.x, centroid_row=polygon.centroid.y,
                                       centroid_zoom=zoom))
     session.commit()
     session.close()
