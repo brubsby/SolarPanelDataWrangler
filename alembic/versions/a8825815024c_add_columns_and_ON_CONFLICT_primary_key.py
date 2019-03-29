@@ -5,7 +5,7 @@ just did the migrate by hand via this method: https://stackoverflow.com/a/143535
 I've left my notes/attempt here commented out just in case someone wants to try and do it
 
 Revision ID: a8825815024c
-Revises: 474f3ed46f73
+Revises:
 Create Date: 2019-03-25 15:45:05.011747
 
 """
@@ -19,7 +19,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import expression
 
 revision = 'a8825815024c'
-down_revision = '474f3ed46f73'
+down_revision = None
 branch_labels = None
 depends_on = None
 

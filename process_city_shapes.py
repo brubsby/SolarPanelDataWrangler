@@ -51,7 +51,7 @@ def get_polygons(csvpath, exclude=None):
 
 # For decreased computational complexity I run some simplification of the polygons gathered before putting them all
 # together into one collection, because these shapes are just a starting point and pretty arbitrary
-def make_megagon(csvpath, exclude=None):
+def combine_all_polygons(csvpath, exclude=None):
     return GeometryCollection([shape(polygon).convex_hull.simplify(0.001).buffer(0.004) for polygon in get_polygons(
         csvpath, exclude=exclude)])
 
@@ -109,7 +109,7 @@ def calculate_inner_coordinates(zoom=21):
     import solardb
 
     slippy_tile_coordinates = list(convert_to_slippy_tile_coords(
-        list(make_megagon(args.csvpath, exclude=solardb.get_finished_polygon_names())), zoom=zoom))
+        list(combine_all_polygons(args.csvpath, exclude=solardb.get_finished_polygon_names())), zoom=zoom))
     city_state_tuples = list(get_city_state_tuples(args.csvpath))
     assert (len(city_state_tuples) == len(slippy_tile_coordinates))  # make sure no length mismatch
     zipped_names_and_polygons = list(zip([', '.join(city_state_tuple) for city_state_tuple in city_state_tuples],
@@ -122,16 +122,17 @@ def calculate_inner_coordinates(zoom=21):
     for name, polygon in to_calculate_names_and_polygons:
         coordinates = get_coords_caller(name, polygon)
         solardb.persist_coords(name, coordinates, zoom=zoom)
-    print(time.time() - start)
+    print("Total running time to calculate inner coordinates: " + str(time.time() - start) + " seconds.")
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Process shapes of city polygons')
+    parser = argparse.ArgumentParser(description=
+                                     'Process shapes of city polygons that were created by gather_city_shapes.py')
     parser.add_argument('--input_csv', dest='csvpath', default=os.path.join('data', '100k_US_cities.csv'),
                         help='specify the csv list of city and state names to gather geoJSON for')
-    parser.add_argument('--megagon', dest='megagon', action='store_const',
+    parser.add_argument('--combine_polygons', dest='combine_polygons', action='store_const',
                         const=True, default=False,
-                        help='Create the megagon (all of the city polygons combined) and save it')
+                        help='Combine all of the city polygons and save into a geojson')
     parser.add_argument('--calculate_area', dest='area', action='store_const',
                         const=True, default=False,
                         help='Calculates the area of all polygons in km2')
@@ -142,18 +143,21 @@ if __name__ == '__main__':
     parser.add_argument('--calculate_centroids', dest='centroids', action='store_const',
                         const=True, default=False,
                         help='Calculates missing centroids in the database')
+    parser.add_argument('--query_osm_solar', dest='osm_solar', action='store_const',
+                        const=True, default=False,
+                        help='Queries and persists existing solar panel locations from osm from the combined polygons')
     parser.add_argument('--geojsonio', dest='geojsonio', action='store_const',
                         const=True, default=False,
                         help='Opens processing output in geojsonio if the operation makes sense')
     args = parser.parse_args()
 
     output = None
-    if args.megagon:
-        megagon = make_megagon(args.csvpath)
-        save_geojson('megagon.geojson', megagon)
-        output = megagon
+    if args.combine_polygons:
+        geometry_collection_of_polygons = combine_all_polygons(args.csvpath)
+        save_geojson('geom_collection.geojson', geometry_collection_of_polygons)
+        output = geometry_collection_of_polygons
     if args.area:
-        projected_polygons = convert_to_slippy_tile_coords(list(make_megagon(args.csvpath)), zoom=21)
+        projected_polygons = convert_to_slippy_tile_coords(list(combine_all_polygons(args.csvpath)), zoom=21)
         print(str(math.ceil(sum([polygon.area for polygon in projected_polygons])))
               + " total API calls to cover this polygon area!")
         output = projected_polygons
@@ -163,5 +167,9 @@ if __name__ == '__main__':
         if 'solardb' not in sys.modules:
             import solardb
         solardb.compute_centroids()
+    if args.osm_solar:
+        if 'solardb' not in sys.modules:
+            import solardb
+        solardb.query_and_persist_osm_solar(list(combine_all_polygons(args.csvpath)))
     if args.geojsonio and output is not None:
         geojsonio.display(geopandas.GeoSeries(output))

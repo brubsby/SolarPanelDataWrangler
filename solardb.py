@@ -1,11 +1,12 @@
-import math
+
 import time
 
+import math
+import overpy
 from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, PrimaryKeyConstraint
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
-
 from sqlalchemy.sql import expression
 
 Base = declarative_base()
@@ -40,6 +41,17 @@ class SlippyTile(Base):
 
     __table_args__ = (
         PrimaryKeyConstraint(row, column, zoom, sqlite_on_conflict='IGNORE'),
+    )
+
+
+class OSMSolarNode(Base):
+    __tablename__ = 'osm_solar_nodes'
+
+    longitude = Column(Float, nullable=False)
+    latitude = Column(Float, nullable=False)
+
+    __table_args__ = (
+        PrimaryKeyConstraint(longitude, latitude, sqlite_on_conflict='IGNORE'),
     )
 
 
@@ -132,5 +144,45 @@ def mark_has_imagery(base_coord, grid_size, zoom=21):
         tiles_to_add.append(SlippyTile(column=coord[0], row=coord[1], zoom=zoom, polygon_name=polygon_name,
                                        has_image=True))
     session.add_all(tiles_to_add)
+    session.commit()
+    session.close()
+
+
+# decimal places to round is so nodes with close lat/lon are only counted as one point,
+# degree precision versus length chart: https://en.wikipedia.org/wiki/Decimal_degrees#Precision
+def query_osm_solar(polygons, decimal_places_to_round=5):
+    api = overpy.Overpass()
+    solar_node_lon_lats = set()
+    for polygon in polygons:
+        # little bit of python magic to massage the polygon into a space separated list of coordinates
+        polygon_coords_string = " ".join([" ".join(map(str, coord)) for coord in zip(*reversed(polygon.boundary.xy))])
+        # I've read that querying within a polygon is a lot slower than querying within a bounding box, so if this
+        # ends up being too slow, feel free to just replace with the bounding box of the polygon
+        query_string = \
+            """
+            [out:json][timeout:2500];
+            (
+            node["generator:source"="solar"](poly:"{poly}");
+            way["generator:source"="solar"](poly:"{poly}");
+            relation["generator:source"="solar"](poly:"{poly}");
+            );
+            out body;
+            >;
+            out skel qt;
+            """.format(poly=polygon_coords_string)
+        result = api.query(query_string)
+        for node in result.nodes:
+            solar_node_lon_lats.add(
+                (round(node.lon, decimal_places_to_round), round(node.lat, decimal_places_to_round)))
+    return solar_node_lon_lats
+
+
+def query_and_persist_osm_solar(polygons):
+    session = Session()
+    solar_node_lon_lats = query_osm_solar(polygons)
+    solar_nodes = []
+    for lon, lat in solar_node_lon_lats:
+        solar_nodes.append(OSMSolarNode(longitude=lon, latitude=lat))
+    session.add_all(solar_nodes)
     session.commit()
     session.close()
