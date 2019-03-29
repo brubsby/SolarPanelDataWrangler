@@ -3,7 +3,7 @@ import time
 
 import math
 import overpy
-from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, PrimaryKeyConstraint
+from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, PrimaryKeyConstraint, Index
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
@@ -41,6 +41,7 @@ class SlippyTile(Base):
 
     __table_args__ = (
         PrimaryKeyConstraint(row, column, zoom, sqlite_on_conflict='IGNORE'),
+        Index('centroid_index', polygon_name, centroid_distance)
     )
 
 
