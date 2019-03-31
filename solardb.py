@@ -129,7 +129,7 @@ def mark_has_imagery(base_coord, grid_size, zoom=21):
     tile_query.update({SlippyTile.has_image: True}, synchronize_session='fetch')
     tiles = tile_query.all()
     # get the first tile's parent polygon if they have one
-    polygon_name = next(iter(tiles or []), None).polygon_name
+    polygon_name = getattr(next(iter(tiles or []), None), "polygon_name", None)
 
     # create a meshgrid of points in this grid
     coords = {}
