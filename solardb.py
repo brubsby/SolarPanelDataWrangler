@@ -3,7 +3,7 @@ import time
 
 import math
 import overpy
-from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, PrimaryKeyConstraint, Index
+from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, PrimaryKeyConstraint, Index, desc
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
@@ -187,3 +187,28 @@ def query_and_persist_osm_solar(polygons):
     session.add_all(solar_nodes)
     session.commit()
     session.close()
+
+
+def query_tile_batch_for_inference(batch_size=400):
+    session = Session()
+    tiles = \
+        session.query(SlippyTile).filter(SlippyTile.centroid_distance.isnot(None), SlippyTile.inference_ran.is_(False))\
+            .order_by(SlippyTile.polygon_name, SlippyTile.centroid_distance).limit(batch_size).all()
+    session.close()
+    return tiles
+
+
+def update_tiles(tiles):
+    session = Session()
+    session.add_all(tiles)
+    session.commit()
+    session.close()
+
+
+def query_tiles_over_threshold(threshold=0.5):
+    session = Session()
+    coordinates = \
+        session.query(SlippyTile).filter(SlippyTile.panel_softmax.isnot(None), SlippyTile.panel_softmax >= threshold)\
+            .order_by(desc(SlippyTile.panel_softmax)).all()
+    session.close()
+    return coordinates
