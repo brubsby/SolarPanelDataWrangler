@@ -189,8 +189,3 @@ def stitch_image_at_coordinate(slippy_coordinate, zoom=FINAL_ZOOM, finished_tile
     for cropped_image, paste_coordinate in zip(cropped_images, paste_coordinates):
         cropped_images.append(output_image.paste(cropped_image, box=paste_coordinate))
     return output_image
-
-
-if __name__ == "__main__":
-    stitch_image_at_coordinate((634291, 775538)).save(
-        os.path.join(os.path.join(os.getcwd(), 'data', 'imagery', 'stitch_sample.jpg')))
