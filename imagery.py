@@ -131,6 +131,8 @@ PASTE_COORDINATES = [
     (TILE_SIDE_LENGTH + STITCH_WIDTH, TILE_SIDE_LENGTH + STITCH_WIDTH),
 ]
 
+RETRIES = 2
+
 service = Static()
 
 
@@ -147,28 +149,29 @@ def gather_and_persist_imagery_at_coordinate(slippy_coordinates, final_zoom=FINA
         center_tile = tuple(map(lambda x: x + grid_size // 2, base_coords))
         center_lon_lat = num2deg(center_tile, zoom=FINAL_ZOOM, center=True)
     if imagery == "mapbox":
-        response = service.image('mapbox.satellite', lon=center_lon_lat[0], lat=center_lon_lat[1], z=final_zoom - 2,
-                                 width=MAX_IMAGE_SIDE_LENGTH, height=MAX_IMAGE_SIDE_LENGTH, image_format='jpg90',
-                                 retina=(ZOOM_FACTOR > 0))
-        if response.ok:
-            image = Image.open(BytesIO(response.content))
-            tiles = slice_image(image, base_coords, upsample_count=max(ZOOM_FACTOR - 1, 0),
-                                slices_per_side=grid_size)
-            to_return = None
-            for tile in tiles:
-                if tile.coords == slippy_coordinates:
-                    to_return = tile.image
-                tile.save(zoom=FINAL_ZOOM)
-            solardb.mark_has_imagery(base_coords, grid_size, zoom=final_zoom)
-            return to_return
-        else:
-            raise ConnectionError(response.content)
+        response = None
+        for i in range(RETRIES):
+            response = service.image('mapbox.satellite', lon=center_lon_lat[0], lat=center_lon_lat[1], z=final_zoom - 2,
+                                     width=MAX_IMAGE_SIDE_LENGTH, height=MAX_IMAGE_SIDE_LENGTH, image_format='jpg90',
+                                     retina=(ZOOM_FACTOR > 0))
+            if response.ok:
+                image = Image.open(BytesIO(response.content))
+                tiles = slice_image(image, base_coords, upsample_count=max(ZOOM_FACTOR - 1, 0),
+                                    slices_per_side=grid_size)
+                to_return = None
+                for tile in tiles:
+                    if tile.coords == slippy_coordinates:
+                        to_return = tile.image
+                    tile.save(zoom=FINAL_ZOOM)
+                solardb.mark_has_imagery(base_coords, grid_size, zoom=final_zoom)
+                return to_return
+        raise ConnectionError(getattr(response, "content", None))
     else:
         AttributeError("Unsupported Imagery source: " + str(imagery))
 
 
 # loads image from disk if possible, otherwise queries an imagery service
-def get_image_for_coordinate(slippy_coordinate, FINAL_ZOOM=FINAL_ZOOM):
+def get_image_for_coordinate(slippy_coordinate):
     tile = ImageTile(None, slippy_coordinate)
     image = tile.load()
     if not image:
@@ -184,7 +187,7 @@ def stitch_image_at_coordinate(slippy_coordinate):
     # gather the images in each direction around the target image
     for column in range(slippy_coordinate[0] - 1, slippy_coordinate[0] + 2):
         for row in range(slippy_coordinate[1] - 1, slippy_coordinate[1] + 2):
-            images.append(get_image_for_coordinate((column, row), FINAL_ZOOM=FINAL_ZOOM))
+            images.append(get_image_for_coordinate((column, row),))
 
     cropped_images = []
     for image, crop_box in zip(images, CROP_BOXES):
