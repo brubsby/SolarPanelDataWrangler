@@ -102,6 +102,35 @@ MAX_IMAGE_SIDE_LENGTH = 1280
 # number of times to cut the source imagery to get it to correct tile size
 GRID_SIZE = (MAX_IMAGE_SIDE_LENGTH // TILE_SIDE_LENGTH) * 2 ** ZOOM_FACTOR
 
+# the side length of the stitched image
+FINISHED_TILE_SIDE_LENGTH = 320
+# the amount to stitch from each border tile
+STITCH_WIDTH = (FINISHED_TILE_SIDE_LENGTH - TILE_SIDE_LENGTH) // 2
+# the amount not to stitch from each border tile
+CROPPED_WIDTH = TILE_SIDE_LENGTH - STITCH_WIDTH
+CROP_BOXES = [
+    (CROPPED_WIDTH, CROPPED_WIDTH, TILE_SIDE_LENGTH, TILE_SIDE_LENGTH),
+    (CROPPED_WIDTH, 0, TILE_SIDE_LENGTH, TILE_SIDE_LENGTH),
+    (CROPPED_WIDTH, 0, TILE_SIDE_LENGTH, STITCH_WIDTH),
+    (0, CROPPED_WIDTH, TILE_SIDE_LENGTH, TILE_SIDE_LENGTH),
+    (0, 0, TILE_SIDE_LENGTH, TILE_SIDE_LENGTH),
+    (0, 0, TILE_SIDE_LENGTH, STITCH_WIDTH),
+    (0, CROPPED_WIDTH, STITCH_WIDTH, TILE_SIDE_LENGTH),
+    (0, 0, STITCH_WIDTH, TILE_SIDE_LENGTH),
+    (0, 0, STITCH_WIDTH, STITCH_WIDTH)
+]
+PASTE_COORDINATES = [
+    (0, 0),
+    (0, STITCH_WIDTH),
+    (0, TILE_SIDE_LENGTH + STITCH_WIDTH),
+    (STITCH_WIDTH, 0),
+    (STITCH_WIDTH, STITCH_WIDTH),
+    (STITCH_WIDTH, TILE_SIDE_LENGTH + STITCH_WIDTH),
+    (TILE_SIDE_LENGTH + STITCH_WIDTH, 0),
+    (TILE_SIDE_LENGTH + STITCH_WIDTH, STITCH_WIDTH),
+    (TILE_SIDE_LENGTH + STITCH_WIDTH, TILE_SIDE_LENGTH + STITCH_WIDTH),
+]
+
 service = Static()
 
 
@@ -139,53 +168,28 @@ def gather_and_persist_imagery_at_coordinate(slippy_coordinates, final_zoom=FINA
 
 
 # loads image from disk if possible, otherwise queries an imagery service
-def get_image_for_coordinate(slippy_coordinate, zoom=FINAL_ZOOM):
+def get_image_for_coordinate(slippy_coordinate, FINAL_ZOOM=FINAL_ZOOM):
     tile = ImageTile(None, slippy_coordinate)
     image = tile.load()
     if not image:
-        image = gather_and_persist_imagery_at_coordinate(slippy_coordinate, final_zoom=zoom)
+        image = gather_and_persist_imagery_at_coordinate(slippy_coordinate, final_zoom=FINAL_ZOOM)
     return image
 
 
 # gets a larger image at the specified slippy coordinate by stitching other border tiles together
-# TODO: optimize (probably remove a lot of inner variables and make them constants)
+# TODO: optimize
 # TODO: there's also some symmetry here that can be exploited but this seems easier for now
-def stitch_image_at_coordinate(slippy_coordinate, zoom=FINAL_ZOOM, finished_tile_side_length=320):
+def stitch_image_at_coordinate(slippy_coordinate):
     images = []
     # gather the images in each direction around the target image
     for column in range(slippy_coordinate[0] - 1, slippy_coordinate[0] + 2):
         for row in range(slippy_coordinate[1] - 1, slippy_coordinate[1] + 2):
-            images.append(get_image_for_coordinate((column, row), zoom=zoom))
-    # the amount to stitch from each border tile
-    stitch_width = (finished_tile_side_length - TILE_SIDE_LENGTH) // 2
-    # the amount not to stitch from each border tile
-    cropped_width = TILE_SIDE_LENGTH - stitch_width
-    crop_boxes = [
-        (cropped_width, cropped_width, TILE_SIDE_LENGTH, TILE_SIDE_LENGTH),
-        (cropped_width, 0, TILE_SIDE_LENGTH, TILE_SIDE_LENGTH),
-        (cropped_width, 0, TILE_SIDE_LENGTH, stitch_width),
-        (0, cropped_width, TILE_SIDE_LENGTH, TILE_SIDE_LENGTH),
-        (0, 0, TILE_SIDE_LENGTH, TILE_SIDE_LENGTH),
-        (0, 0, TILE_SIDE_LENGTH, stitch_width),
-        (0, cropped_width, stitch_width, TILE_SIDE_LENGTH),
-        (0, 0, stitch_width, TILE_SIDE_LENGTH),
-        (0, 0, stitch_width, stitch_width)
-    ]
+            images.append(get_image_for_coordinate((column, row), FINAL_ZOOM=FINAL_ZOOM))
+
     cropped_images = []
-    for image, crop_box in zip(images, crop_boxes):
+    for image, crop_box in zip(images, CROP_BOXES):
         cropped_images.append(image.crop(crop_box))
-    paste_coordinates = [
-        (0, 0),
-        (0, stitch_width),
-        (0, TILE_SIDE_LENGTH + stitch_width),
-        (stitch_width, 0),
-        (stitch_width, stitch_width),
-        (stitch_width, TILE_SIDE_LENGTH + stitch_width),
-        (TILE_SIDE_LENGTH + stitch_width, 0),
-        (TILE_SIDE_LENGTH + stitch_width, stitch_width),
-        (TILE_SIDE_LENGTH + stitch_width, TILE_SIDE_LENGTH + stitch_width),
-    ]
-    output_image = Image.new('RGB', (finished_tile_side_length, finished_tile_side_length))
-    for cropped_image, paste_coordinate in zip(cropped_images, paste_coordinates):
+    output_image = Image.new('RGB', (FINISHED_TILE_SIDE_LENGTH, FINISHED_TILE_SIDE_LENGTH))
+    for cropped_image, paste_coordinate in zip(cropped_images, PASTE_COORDINATES):
         cropped_images.append(output_image.paste(cropped_image, box=paste_coordinate))
     return output_image
