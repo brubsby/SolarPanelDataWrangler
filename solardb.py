@@ -205,10 +205,13 @@ def update_tiles(tiles):
     session.close()
 
 
-def query_tiles_over_threshold(threshold=0.5):
+def query_tiles_over_threshold(threshold=0.5, polygon_name=None):
     session = Session()
-    coordinates = \
-        session.query(SlippyTile).filter(SlippyTile.panel_softmax.isnot(None), SlippyTile.panel_softmax >= threshold)\
-            .order_by(desc(SlippyTile.panel_softmax)).all()
+    coordinate_query = session.query(SlippyTile).filter(SlippyTile.panel_softmax.isnot(None),
+                                                        SlippyTile.panel_softmax >= threshold).order_by(
+        desc(SlippyTile.panel_softmax))
+    if polygon_name:
+        coordinate_query = coordinate_query.filter(SlippyTile.polygon_name == polygon_name)
+    coordinates = coordinate_query.all()
     session.close()
     return coordinates
