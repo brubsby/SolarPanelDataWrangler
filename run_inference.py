@@ -51,6 +51,7 @@ if __name__ == '__main__':
 
             tile.panel_softmax = predictor.classify(resized_image)
             tile.inference_ran = True
+            tile.inference_timestamp = time.time()
 
         solardb.update_tiles(tiles)
 
