@@ -28,4 +28,5 @@ def create_maproulette_geojson(threshold=0.25, polygon_name=None):
             the_file.write(GEOJSON_STRING.format(points=points, confidence=confidence))
 
 
-create_maproulette_geojson()
+if __name__ == "main":
+    create_maproulette_geojson()

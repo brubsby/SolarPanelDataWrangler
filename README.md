@@ -17,16 +17,15 @@ Next, process_city_shapes.py contains a number of ways to perform operations on 
 
 solardb.py contains an ORM for the database object that is currently SQLite, along with some helper functions to aid persistence. I also have started tracking data migrates via alembic, and I'm not sure how well my migrates work for new users, so please leave an issue if you're having trouble with the configuration and I'll try to help.
 
-The next steps are to:
-- ~~map the coordinate database to the mapbox API, and to properly queue, slice up, and persist satelitte images until they can have inference run on them~~
-- ~~implement preprocessing to stitch images together~~
-- ~~modify [DeepSolar](https://github.com/typicalTYLER/DeepSolar) to run inference on arbitrary tile batches (currently just runs on test set)~~
-- ~~query OSM existing solar panel locations to exclude from results~~
-- do something with the results (pass to human verification system, post spreadsheet of locations, etc.)
-- optimize slower parts of this code (I've tried to parallelize the inner grid calculation and persistence but after much effort it was still not working correctly)
-- fix SQLAlchemy connection/session handling so not as many are created
-- possibly gather imagery from different sources if mapbox is too rate limited
+imagery.py contains code to query and preprocess satellite data (currently only from MapBox, but this is where you'd add more services if you wanted).
+
+run_inference.py downloads, preprocesses, and runs inference on all the computed points in the database that don't have an estimation of whether they contain a solar panel.
+
+maproulette.py contains functionality to turn positive classifications (above a certainty threshold) into a line-by-line geoJSON that can be turned into a MapRoulette class 
 
 # Contributing
 
 Feel free to sign up for and submit pull requests for one of the [existing issues](https://github.com/typicalTYLER/SolarPanelDataWrangler/issues) if you want to contribute! I'm also down to add other Open Climate Fix collaborators as collaborators on this repo. Also feel free to create issues if you are having trouble with anything in this repo.
+
+# Quickstart
+TODO :)
