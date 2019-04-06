@@ -57,6 +57,12 @@ class ImageTile(object):
         self.image = Image.open(filename)
         return self.image
 
+    def delete(self, filename=None, zoom=21):  # TODO zoom should probably be a tile property
+        if not filename:
+            filename = self.generate_filename(zoom=zoom)
+        pathlib.Path(filename).unlink()
+        self.filename = filename
+
     def __repr__(self):
         """Show tile coords, and if saved to disk, filename."""
         if self.filename:
@@ -196,3 +202,8 @@ def stitch_image_at_coordinate(slippy_coordinate):
     for cropped_image, paste_coordinate in zip(cropped_images, PASTE_COORDINATES):
         cropped_images.append(output_image.paste(cropped_image, box=paste_coordinate))
     return output_image
+
+
+def delete_images(slippy_coordinates):
+    for coordinate_tuple in slippy_coordinates:
+        ImageTile(None, coordinate_tuple).delete(zoom=coordinate_tuple[2])

@@ -189,6 +189,17 @@ def query_and_persist_osm_solar(polygons):
     session.close()
 
 
+def query_tile_batch(batch_size=1000000, polygon_name=None):
+    session = Session()
+    tile_query = session.query(SlippyTile).filter(SlippyTile.has_image.is_(True), SlippyTile.inference_ran.is_(True))\
+        .limit(batch_size)
+    if polygon_name:
+        tile_query = tile_query.filter(SlippyTile.polygon_name == polygon_name)
+    tiles = tile_query.all()
+    session.close()
+    return tiles
+
+
 def query_tile_batch_for_inference(batch_size=400):
     session = Session()
     tiles = \
