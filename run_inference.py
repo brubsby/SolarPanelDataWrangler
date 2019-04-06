@@ -19,35 +19,37 @@ IMAGE_SIZE = 299
 
 
 def batch_delete_extra_imagery():
-    # TODO go through each polygon separately for performance
-    tiles_above_threshold = solardb.query_tiles_over_threshold()
-    expanded_coords_above_threshold = set()
-    for tile in tiles_above_threshold:
-        for column in range(tile.column - 1, tile.column + 2):
-            for row in range(tile.row - 1, tile.row + 2):
-                expanded_coords_above_threshold.add((column, row, tile.zoom))
-    print("Calculation for expanded coords completed")
-    while True:
-        tile_batch = solardb.query_tile_batch()
-        to_delete = []
-        if not tile_batch:
-            break
-        for tile in tile_batch:
-            tile_tuple = (tile.column, tile.row, tile.zoom)
-            if tile_tuple not in expanded_coords_above_threshold:
-                tile.has_image = False
-                to_delete.append(tile_tuple)
-        solardb.update_tiles(tile_batch)
-        imagery.delete_images(to_delete)
-        print("Deleted {} non-solar imagery tiles".format(len(to_delete)))
-        # if no tiles got deleted in the batch it's probably done
-        # if the number of expanded coords is larger than the batch size though, this could theoretically return early
-        if not to_delete:
-            break
+    polygon_names = solardb.get_polygon_names()
+    for polygon_name in polygon_names:
+        tiles_above_threshold = solardb.query_tiles_over_threshold(polygon_name=polygon_name)
+        expanded_coords_above_threshold = set()
+        for tile in tiles_above_threshold:
+            for column in range(tile.column - 1, tile.column + 2):
+                for row in range(tile.row - 1, tile.row + 2):
+                    expanded_coords_above_threshold.add((column, row, tile.zoom))
+        print("Calculation for expanded coords for {polygon_name} completed".format(polygon_name=polygon_name))
+        while True:
+            tile_batch = solardb.query_tile_batch(polygon_name=polygon_name)
+            to_delete = []
+            if not tile_batch:
+                break
+            for tile in tile_batch:
+                tile_tuple = (tile.column, tile.row, tile.zoom)
+                if tile_tuple not in expanded_coords_above_threshold:
+                    tile.has_image = False
+                    to_delete.append(tile_tuple)
+            solardb.update_tiles(tile_batch)
+            imagery.delete_images(to_delete)
+            print("Deleted {num} non-solar imagery tiles for {polygon_name}".format(num=len(to_delete),
+                                                                                    polygon_name=polygon_name))
+            # if no tiles got deleted in the batch it's probably done
+            # if the number of expanded coords is larger than the batch size, this could theoretically return early
+            if not to_delete:
+                break
     print("Deletion finished")
 
 
-def run_inference(delete_every=None):
+def run_classification(delete_every=None):
     predictor = Predictor(
         dirpath_classification_checkpoint=args.classification_checkpoint,
         dirpath_segmentation_checkpoint=args.segmentation_checkpoint
@@ -96,4 +98,4 @@ if __name__ == '__main__':
                         help='Deletes extra imagery every x inference batches, default {}'.format(DEFAULT_DELETE_EVERY))
     args = parser.parse_args()
 
-    run_inference(delete_every=args.delete_every)
+    run_classification(delete_every=args.delete_every)

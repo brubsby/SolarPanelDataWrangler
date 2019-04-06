@@ -89,11 +89,18 @@ def persist_coords(polygon_name, coords, zoom=21, batch_size=100000):
     print(str(time.time() - start_time) + " seconds to complete inner grid persistence for " + polygon_name)
 
 
+def get_polygon_names():
+    session = Session()
+    polygons = session.query(SearchPolygon).all()
+    session.close()
+    return [polygon.name for polygon in polygons]
+
+
 def get_finished_polygon_names():
     session = Session()
-    names = session.query(SearchPolygon.name).filter(SearchPolygon.inner_coords_calculated.is_(True))
+    polygons = session.query(SearchPolygon).filter(SearchPolygon.inner_coords_calculated.is_(True)).all()
     session.close()
-    return names
+    return [polygon.name for polygon in polygons]
 
 
 def polygon_has_inner_grid(name):
