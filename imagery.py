@@ -1,5 +1,6 @@
 import os
 import pathlib
+import time
 from io import BytesIO
 
 from PIL import Image
@@ -137,7 +138,7 @@ PASTE_COORDINATES = [
     (TILE_SIDE_LENGTH + STITCH_WIDTH, TILE_SIDE_LENGTH + STITCH_WIDTH),
 ]
 
-RETRIES = 2
+MAX_RETRIES = 12  # max wait time with exponential backoff would be ~34 minutes
 
 service = Static()
 
@@ -155,8 +156,7 @@ def gather_and_persist_imagery_at_coordinate(slippy_coordinates, final_zoom=FINA
         center_tile = tuple(map(lambda x: x + grid_size // 2, base_coords))
         center_lon_lat = num2deg(center_tile, zoom=FINAL_ZOOM, center=True)
     if imagery == "mapbox":
-        response = None
-        for i in range(RETRIES):
+        for i in range(MAX_RETRIES):
             response = service.image('mapbox.satellite', lon=center_lon_lat[0], lat=center_lon_lat[1], z=final_zoom - 2,
                                      width=MAX_IMAGE_SIDE_LENGTH, height=MAX_IMAGE_SIDE_LENGTH, image_format='jpg90',
                                      retina=(ZOOM_FACTOR > 0))
@@ -171,7 +171,12 @@ def gather_and_persist_imagery_at_coordinate(slippy_coordinates, final_zoom=FINA
                     tile.save(zoom=FINAL_ZOOM)
                 solardb.mark_has_imagery(base_coords, grid_size, zoom=final_zoom)
                 return to_return
-        raise ConnectionError(getattr(response, "content", None))
+            backoff_time = pow(2, i)
+            print('Got this response from {service}:"{error}", exponentially backing off, {time} seconds.'
+                  .format(service=imagery, error=getattr(response, "content", None), time=backoff_time))
+            time.sleep(backoff_time)
+        raise ConnectionError("Couldn't connect to {service} after {retries}"
+                              .format(service=imagery, retries=MAX_RETRIES))
     else:
         AttributeError("Unsupported Imagery source: " + str(imagery))
 
