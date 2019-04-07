@@ -23,6 +23,12 @@ class SearchPolygon(Base):
     inner_coords_calculated = Column(Boolean, nullable=False, server_default=expression.false())
 
 
+class PositiveCluster(Base):
+    __tablename__ = 'positive_clusters'
+
+    id = Column(Integer, primary_key=True)
+
+
 class SlippyTile(Base):
     __tablename__ = 'slippy_tiles'
 
@@ -30,8 +36,10 @@ class SlippyTile(Base):
     column = Column(Integer, nullable=False)
     zoom = Column(Integer, nullable=False)
     centroid_distance = Column(Float)
-    polygon_name = Column(String, ForeignKey('search_polygons.name'))
+    polygon_name = Column(String, ForeignKey(SearchPolygon.name), nullable=True)
     polygon = relationship("SearchPolygon")
+    cluster_id = Column(String, ForeignKey(PositiveCluster.id), nullable=True)
+    cluster = relationship("PositiveCluster")
     has_image = Column(Boolean, nullable=False, server_default=expression.false())
     inference_ran = Column(Boolean, nullable=False, server_default=expression.false())
     inference_timestamp = Column(Integer, nullable=True)  # UNIX EPOCH
@@ -198,11 +206,10 @@ def query_and_persist_osm_solar(polygons):
 
 def query_tile_batch(batch_size=1000000, polygon_name=None):
     session = Session()
-    tile_query = session.query(SlippyTile).filter(SlippyTile.has_image.is_(True), SlippyTile.inference_ran.is_(True))\
-        .limit(batch_size)
+    tile_query = session.query(SlippyTile).filter(SlippyTile.has_image.is_(True), SlippyTile.inference_ran.is_(True))
     if polygon_name:
         tile_query = tile_query.filter(SlippyTile.polygon_name == polygon_name)
-    tiles = tile_query.all()
+    tiles = tile_query.limit(batch_size).all()
     session.close()
     return tiles
 
@@ -223,13 +230,25 @@ def update_tiles(tiles):
     session.close()
 
 
-def query_tiles_over_threshold(threshold=0.5, polygon_name=None):
+def query_tiles_over_threshold(threshold=0.25, polygon_name=None, filter_clustered=False):
     session = Session()
     coordinate_query = session.query(SlippyTile).filter(SlippyTile.panel_softmax.isnot(None),
                                                         SlippyTile.panel_softmax >= threshold).order_by(
         desc(SlippyTile.panel_softmax))
     if polygon_name:
         coordinate_query = coordinate_query.filter(SlippyTile.polygon_name == polygon_name)
+    if filter_clustered:
+        coordinate_query = coordinate_query.filter(SlippyTile.cluster_id.is_(None))
     coordinates = coordinate_query.all()
     session.close()
     return coordinates
+
+
+def get_new_positive_cluster_id():
+    session = Session()
+    positive_cluster = PositiveCluster()
+    session.add(positive_cluster)
+    session.commit()
+    positive_cluster_id = positive_cluster.id
+    session.close()
+    return positive_cluster_id
