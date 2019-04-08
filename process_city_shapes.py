@@ -14,8 +14,17 @@ from shapely.geometry import shape, mapping, GeometryCollection, Point
 from gather_city_shapes import get_city_state_filepaths, get_city_state_tuples
 
 
-# function to convert lat lon to slippy tiles
 def deg2num(arr, zoom=21):
+    """
+    Convert input array of longitude and latitude into slippy tile coordinates.
+
+    :param arr: input list or tuple that contains the longitude and latitude to convert, the input is in addressable
+    form so that it can be called by np.apply_along_axis(...)
+    :param zoom: zoom parameter necessary for calculating slippy tile coordinates, defaults to 21 because that's the
+    zoom level DeepSolar operates at
+    :return: slippy tile coordinate tuple containing column and row (sometimes referred to as x_tile and y_tile
+    respectively)
+    """
     lon_deg = arr[0]
     lat_deg = arr[1]
     lat_rad = np.math.radians(lat_deg)
@@ -25,8 +34,18 @@ def deg2num(arr, zoom=21):
     return column, row
 
 
-# function to convert slippy tiles to lat lon
 def num2deg(arr, zoom=21, center=True):
+    """
+    Convert input array of column and row into longitude latitude coordinates
+
+    :param arr: input list or tuple that contains slippy tile column and row coordinates to convert. As above, the input
+    is in addressable form so that np.apply_along_axis(...) can easily call it.
+    :param zoom: zoom parameter necessary for calculating longitude latitude coordinates, defaults to 21 because that's
+    the zoom level DeepSolar operates at
+    :param center: boolean that determines whether the lon_lat should be at the middle of the tile or the top left,
+    defaults to center
+    :return: lon lat tuple
+    """
     column = arr[0]
     row = arr[1]
     if center:
@@ -40,6 +59,14 @@ def num2deg(arr, zoom=21, center=True):
 
 
 def get_polygons(csvpath, exclude=None):
+    """
+    Loads polygons for cities listed in csvpath, polygons must have already been calculated and placed into
+    data/geoJSON/<city>.<state>.json
+
+    :param csvpath: path to csv containing city, state names for polygons to load
+    :param exclude: list of name strings to exclude from the load (name string is "<city>, <state>"), default None
+    :return: yields the json of the polygon file
+    """
     if exclude is None:
         exclude = []
     for city, state, filepath in get_city_state_filepaths(csvpath):
@@ -49,36 +76,69 @@ def get_polygons(csvpath, exclude=None):
                 yield json.load(infile)
 
 
-# For decreased computational complexity I run some simplification of the polygons gathered before putting them all
-# together into one collection, because these shapes are just a starting point and pretty arbitrary
 def combine_all_polygons(csvpath, exclude=None):
+    """
+    Combines all polygons loaded from csvpath together into one GeometryCollection, after running some simplification on
+    them to decrease computational complexity.
+
+    :param csvpath: path to csv containing city, state names for polygons to load
+    :param exclude: list of name strings to exclude from the load (name string is "<city>, <state>"), default None
+    :return: GeometryCollection containing all simplified polygons loaded from files
+    """
     return GeometryCollection([shape(polygon).convex_hull.simplify(0.001).buffer(0.004) for polygon in get_polygons(
         csvpath, exclude=exclude)])
 
 
 def convert_to_slippy_tile_coords(polygons, zoom=21):
+    """
+    Converts multiple polygons into slippy tile coordinates
+
+    :param polygons: polygons to convert
+    :param zoom: zoom level used in conversion, defaults to 21
+    :return: converted polygons
+    """
     converted_polygons = []
     for polygon in polygons:
-        geojson = mapping(polygon)
-        geojson['coordinates'] = np.apply_along_axis(deg2num, 2, np.array(geojson['coordinates']), zoom=zoom)
-        converted_polygons.append(shape(geojson))
+        geojson_object = mapping(polygon)
+        geojson_object['coordinates'] = np.apply_along_axis(deg2num, 2, np.array(geojson_object['coordinates']),
+                                                            zoom=zoom)
+        converted_polygons.append(shape(geojson_object))
     return converted_polygons
 
 
 def save_geojson(filename, feature):
+    """
+    Saves the feature parameter in a proper geoJSON file at the given filename in the data directory
+
+    :param filename: filename of saved file in ./data/<filename>
+    :param feature: geoJSON feature to save (usually polygon)
+    """
     with open(os.path.join('data', filename), 'w') as outfile:
         geojson.dump(geojson.Feature(geometry=feature, properties={}), outfile)
 
 
-# function required to call apply_along_axis and get a boolean mask
 def point_mapper(x, polygon=None):
+    """
+    Simple function required to call apply_along_axis and get a boolean mask
+
+    :param x: tuple/list point
+    :param polygon: polygon to check if point is contained in
+    :return: whether or not the polygon contains the point
+    """
     return not polygon.contains(Point((x[0], x[1])))
 
 
-# This method takes a while, possibly need to multiprocess (1 cpu is maxed out on my machine) or switch to matplotlib
-# for possibly more efficient code:
-# https://stackoverflow.com/questions/21339448/how-to-get-list-of-points-inside-a-polygon-in-python
 def get_coords_inside_polygon(polygon):
+    """
+    Calculate all grid coordinate inside a given polygon.
+
+    This method takes a while, possibly need to multiprocess (1 cpu is maxed out on my machine) or switch to matplotlib
+    for possibly more efficient code:
+    https://stackoverflow.com/questions/21339448/how-to-get-list-of-points-inside-a-polygon-in-python
+
+    :param polygon: polygon to calculate coordinates inside of
+    :return: ndarray containing coordinate pairs (shape (x,2))
+    """
     # get a meshgrid the size of the polygon's bounding box
     x, y = np.meshgrid(np.arange(polygon.bounds[0], polygon.bounds[2]), np.arange(polygon.bounds[1], polygon.bounds[3]))
 
@@ -97,20 +157,31 @@ def get_coords_inside_polygon(polygon):
 
 
 def get_coords_caller(name, polygon):
+    """
+    Calls the get inner coordinate method and times the execution
+
+    :param name: name of polygon
+    :param polygon: polygon to calculate inner coordinates of
+    :return: ndarray containing coordinate pairs (shape (x,2))
+    """
     start_time = time.time()
     coordinates = get_coords_inside_polygon(polygon)
     print(str(time.time() - start_time) + " seconds to complete inner grid calculations for " + name)
     return coordinates
 
 
-def calculate_inner_coordinates(zoom=21):
+def calculate_inner_coordinates(csvpath, zoom=21):
+    """
+    Calculates and persists inner coordinates of all polygons in csvpath, this is the public api
+
+    :param csvpath: path containing the csv file for all polygons to calculate inner coordinates for
+    :param zoom: zoom level at which to calculate inner coordinates, defaults to 21
+    """
     start = time.time()
-    # possibly replace with importlib lazy loading if this becomes unwieldy
-    import solardb
 
     slippy_tile_coordinates = list(convert_to_slippy_tile_coords(
-        list(combine_all_polygons(args.csvpath, exclude=solardb.get_finished_polygon_names())), zoom=zoom))
-    city_state_tuples = list(get_city_state_tuples(args.csvpath))
+        list(combine_all_polygons(csvpath, exclude=solardb.get_finished_polygon_names())), zoom=zoom))
+    city_state_tuples = list(get_city_state_tuples(csvpath))
     assert (len(city_state_tuples) == len(slippy_tile_coordinates))  # make sure no length mismatch
     zipped_names_and_polygons = list(zip([', '.join(city_state_tuple) for city_state_tuple in city_state_tuples],
                                          slippy_tile_coordinates))
@@ -162,7 +233,9 @@ if __name__ == '__main__':
               + " total tiles at zoom level " + str(21) + " in this multipolygon area!")
         output = projected_polygons
     if args.inner:
-        calculate_inner_coordinates(zoom=21)
+        # possibly replace with importlib lazy loading if this becomes unwieldy
+        import solardb
+        calculate_inner_coordinates(csvpath=args.csvpath, zoom=21)
     if args.centroids:
         if 'solardb' not in sys.modules:
             import solardb
