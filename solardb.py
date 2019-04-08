@@ -252,3 +252,10 @@ def get_new_positive_cluster_id():
     positive_cluster_id = positive_cluster.id
     session.close()
     return positive_cluster_id
+
+
+def get_osm_pv_nodes():
+    session = Session()
+    nodes = session.query(OSMSolarNode).all()
+    session.close()
+    return [(node.longitude, node.latitude) for node in nodes]

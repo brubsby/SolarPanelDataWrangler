@@ -13,3 +13,5 @@ geopandas
 alembic
 mapbox
 overpy
+# rtree also needs https://libspatialindex.org/#download, only necessary if running maproulette.py with filtering
+rtree
