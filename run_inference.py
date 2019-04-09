@@ -91,10 +91,10 @@ def batch_delete_extra_imagery():
     print("Deletion finished")
 
 
-def run_classification(delete_every=None):
+def run_classification(classification_checkpoint, segmentation_checkpoint=None, delete_every=None):
     predictor = Predictor(
-        dirpath_classification_checkpoint=args.classification_checkpoint,
-        dirpath_segmentation_checkpoint=args.segmentation_checkpoint
+        dirpath_classification_checkpoint=classification_checkpoint,
+        dirpath_segmentation_checkpoint=segmentation_checkpoint
     )
     avg_tiles_per_sec = 0.0
     for i in itertools.count(0):
@@ -141,4 +141,4 @@ if __name__ == '__main__':
                         help='Deletes extra imagery every x inference batches, default {}'.format(DEFAULT_DELETE_EVERY))
     args = parser.parse_args()
 
-    run_classification(delete_every=args.delete_every)
+    run_classification(args.classification_checkpoint, args.segmentation_checkpoint, delete_every=args.delete_every)

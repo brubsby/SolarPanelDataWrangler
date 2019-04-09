@@ -4,6 +4,7 @@ import math
 import os
 import sys
 import time
+import solardb
 
 import geojson
 import geojsonio as geojsonio
@@ -85,8 +86,22 @@ def combine_all_polygons(csvpath, exclude=None):
     :param exclude: list of name strings to exclude from the load (name string is "<city>, <state>"), default None
     :return: GeometryCollection containing all simplified polygons loaded from files
     """
-    return GeometryCollection([shape(polygon).convex_hull.simplify(0.001).buffer(0.004) for polygon in get_polygons(
+    return GeometryCollection([simplify_polygon(polygon) for polygon in get_polygons(
         csvpath, exclude=exclude)])
+
+
+def simplify_polygon(polygon, simplify_tolerance=0.001, buffer_distance=0.004):
+    """
+    Copies the given polygon and runs simplification on it to reduce computational complexity. Iirc, the parameter
+    defaults are taken from some service that simplifies polygons.
+
+    :param polygon: Input polygon
+    :param simplify_tolerance: parameter to pass to simplify, specifies how close the simplified coordinates have to be
+    to the original
+    :param buffer_distance: distance to "dilate" the polygon, the default parameter grows it somewhat
+    :return: simplified shapely polygon
+    """
+    return shape(polygon).convex_hull.simplify(simplify_tolerance).buffer(buffer_distance)
 
 
 def convert_to_slippy_tile_coords(polygons, zoom=21):
@@ -170,7 +185,7 @@ def get_coords_caller(name, polygon):
     return coordinates
 
 
-def calculate_inner_coordinates(csvpath, zoom=21):
+def calculate_inner_coordinates_from_csvpath(csvpath, zoom=21):
     """
     Calculates and persists inner coordinates of all polygons in csvpath, this is the public api
 
@@ -179,12 +194,17 @@ def calculate_inner_coordinates(csvpath, zoom=21):
     """
     start = time.time()
 
-    slippy_tile_coordinates = list(convert_to_slippy_tile_coords(
-        list(combine_all_polygons(csvpath, exclude=solardb.get_finished_polygon_names())), zoom=zoom))
+    polygons = list(combine_all_polygons(csvpath, exclude=solardb.get_inner_coords_calculated_polygon_names()))
     city_state_tuples = list(get_city_state_tuples(csvpath))
-    assert (len(city_state_tuples) == len(slippy_tile_coordinates))  # make sure no length mismatch
-    zipped_names_and_polygons = list(zip([', '.join(city_state_tuple) for city_state_tuple in city_state_tuples],
-                                         slippy_tile_coordinates))
+    polygon_names = [', '.join(city_state_tuple) for city_state_tuple in city_state_tuples]
+    calculate_inner_coordinates(polygon_names, polygons, zoom)
+    print("Total running time to calculate inner coordinates: " + str(time.time() - start) + " seconds.")
+
+
+def calculate_inner_coordinates(polygon_names, polygons, zoom=21):
+    slippy_tile_coordinate_polygons = list(convert_to_slippy_tile_coords(polygons, zoom=zoom))
+    assert (len(polygon_names) == len(slippy_tile_coordinate_polygons))  # make sure no length mismatch
+    zipped_names_and_polygons = list(zip(polygon_names, slippy_tile_coordinate_polygons))
     solardb.persist_polygons(zipped_names_and_polygons, zoom=zoom)
     to_calculate_names_and_polygons = []
     for name, polygon in zipped_names_and_polygons:
@@ -193,7 +213,6 @@ def calculate_inner_coordinates(csvpath, zoom=21):
     for name, polygon in to_calculate_names_and_polygons:
         coordinates = get_coords_caller(name, polygon)
         solardb.persist_coords(name, coordinates, zoom=zoom)
-    print("Total running time to calculate inner coordinates: " + str(time.time() - start) + " seconds.")
 
 
 if __name__ == '__main__':
@@ -233,16 +252,10 @@ if __name__ == '__main__':
               + " total tiles at zoom level " + str(21) + " in this multipolygon area!")
         output = projected_polygons
     if args.inner:
-        # possibly replace with importlib lazy loading if this becomes unwieldy
-        import solardb
-        calculate_inner_coordinates(csvpath=args.csvpath, zoom=21)
+        calculate_inner_coordinates_from_csvpath(csvpath=args.csvpath, zoom=21)
     if args.centroids:
-        if 'solardb' not in sys.modules:
-            import solardb
-        solardb.compute_centroids()
+        solardb.compute_centroid_distances()
     if args.osm_solar:
-        if 'solardb' not in sys.modules:
-            import solardb
         solardb.query_and_persist_osm_solar(list(combine_all_polygons(args.csvpath)))
     if args.geojsonio and output is not None:
         geojsonio.display(geopandas.GeoSeries(output))

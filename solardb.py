@@ -104,7 +104,7 @@ def get_polygon_names():
     return [polygon.name for polygon in polygons]
 
 
-def get_finished_polygon_names():
+def get_inner_coords_calculated_polygon_names():
     session = Session()
     polygons = session.query(SearchPolygon).filter(SearchPolygon.inner_coords_calculated.is_(True)).all()
     session.close()
@@ -118,7 +118,7 @@ def polygon_has_inner_grid(name):
     return inner_grid
 
 
-def compute_centroids(batch_size=10000):
+def compute_centroid_distances(batch_size=10000):
     session = Session()
     while True:
         uncomputed_centroid_tiles = session.query(SlippyTile).filter(
