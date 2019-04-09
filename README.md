@@ -2,9 +2,29 @@
 
 ![image](https://i.imgur.com/2fJrBo2.png)
 
-This is a small project containing scripts I'm using to manipulate data having to do with finding solar panels with machine learning and adding their locations to OpenStreetMap.
+This is a project containing scripts I'm using to manipulate data having to do with finding solar panels with machine learning and adding their locations to OpenStreetMap.
 
 I've chosen to use SQLite and SQLAlchemy for persisting the search locations and panel confidences, just so the process can be restartable, rapidly prototypeable, and doesn't need to be hosted (so other people can pick up the torch where I may leave off). In the future, if this needs to be turned into a long standing service, using SQLAlchemy should hopefully lessen the work required to switch to a more robust RDMS like PostgreSQL or something.
+
+# Quickstart
+
+To install requirements, run:
+
+`pip install -r requirements.txt`
+
+One of the requirements is rtree, which requires you also build libspatialindex, instructions [here](http://toblerity.org/rtree/install.html) (currently only required if you want to add filtering of existing OSM panels to your MapRoulette task to add the found panels to OSM)
+
+Also, currently [this DeepSolar repo](https://github.com/typicalTYLER/DeepSolar) must be present at ../DeepSolar (relative to this repo) and pre-trained weights must be present in the checkpoint directory.
+
+Lastly your Mapbox API key must be in your environment variables as MAPBOX_ACCESS_TOKEN="MY_ACCESS_TOKEN"
+
+With all that taken care of, you can simply run: 
+
+`python run_entire_process.py --city <city to search> --state <state>`
+
+And the whole suite of scripts should run, eventually outputting a MapRoulette challenge geoJSON for your city. (And leaving you with a sqlite database of these locations)
+
+Please create an [issue](https://github.com/typicalTYLER/SolarPanelDataWrangler/issues/new) if you have any trouble with this quickstart!
 
 # Overview
 
@@ -26,6 +46,3 @@ maproulette.py contains functionality to turn positive classifications (above a 
 # Contributing
 
 Feel free to sign up for and submit pull requests for one of the [existing issues](https://github.com/typicalTYLER/SolarPanelDataWrangler/issues) if you want to contribute! I'm also down to add other Open Climate Fix collaborators as collaborators on this repo. Also feel free to create issues if you are having trouble with anything in this repo.
-
-# Quickstart
-TODO :)
