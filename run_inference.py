@@ -32,7 +32,8 @@ def detect_clusters():
         total_iterations = len(coordinates_to_iterate_through)
         print("Starting clustering recursion")
         while coordinates_to_iterate_through:
-            print("{0:.0%}".format(((total_iterations - len(coordinates_to_iterate_through)) / total_iterations)))
+            print("{0:.0%}".format(((total_iterations - len(coordinates_to_iterate_through)) / total_iterations)),
+                  end='\r')
             tile = coordinates_to_iterate_through.pop()
             cluster = {tile}
             positive_cluster_id = solardb.get_new_positive_cluster_id()

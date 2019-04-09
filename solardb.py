@@ -121,8 +121,9 @@ def polygon_has_inner_grid(name):
 def compute_centroid_distances(batch_size=10000):
     session = Session()
     while True:
-        uncomputed_centroid_tiles = session.query(SlippyTile).filter(
-            SlippyTile.centroid_distance.is_(None)).limit(batch_size).all()
+        uncomputed_centroid_tiles = session.query(SlippyTile).filter(SlippyTile.centroid_distance.is_(None),
+                                                                     SlippyTile.polygon_name.isnot(None)
+                                                                     ).limit(batch_size).all()
         if not uncomputed_centroid_tiles:
             break
         for tile in uncomputed_centroid_tiles:
@@ -143,8 +144,6 @@ def mark_has_imagery(base_coord, grid_size, zoom=21):
                                                                                      grid_size - 1))
     tile_query.update({SlippyTile.has_image: True}, synchronize_session='fetch')
     tiles = tile_query.all()
-    # get the first tile's parent polygon if they have one
-    polygon_name = getattr(next(iter(tiles or []), None), "polygon_name", None)
 
     # create a meshgrid of points in this grid
     coords = {}
@@ -157,8 +156,7 @@ def mark_has_imagery(base_coord, grid_size, zoom=21):
     tiles_to_add = []
     # create new tile objects for the remaining points in the meshgrid and add them to the db
     for coord in coords.keys():
-        tiles_to_add.append(SlippyTile(column=coord[0], row=coord[1], zoom=zoom, polygon_name=polygon_name,
-                                       has_image=True))
+        tiles_to_add.append(SlippyTile(column=coord[0], row=coord[1], zoom=zoom, has_image=True))
     session.add_all(tiles_to_add)
     session.commit()
     session.close()

@@ -3,6 +3,7 @@ import os
 
 import geopandas
 from geojsonio import geojsonio
+from shapely.geometry import shape
 
 import gather_city_shapes
 import maproulette
@@ -68,7 +69,7 @@ run_inference.run_classification(args.classification_checkpoint, args.segmentati
 
 print("Querying OpenStreetMap for existing solar panels in this search polygon.")
 # This will requery every time, but it's good because you want your task to filter the newly added panels out.
-solardb.query_and_persist_osm_solar([polygon])
+solardb.query_and_persist_osm_solar([shape(polygon)])
 
 print("Detecting clusters of positive classification tiles.")
 run_inference.detect_clusters()
