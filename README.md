@@ -8,23 +8,45 @@ I've chosen to use SQLite and SQLAlchemy for persisting the search locations and
 
 # Quickstart
 
-To install requirements, run:
-
-`pip install -r requirements.txt`
-
-One of the requirements is rtree, which requires you also build libspatialindex, instructions [here](http://toblerity.org/rtree/install.html) (currently only required if you want to add filtering of existing OSM panels to your MapRoulette task to add the found panels to OSM)
-
-Also, currently [this DeepSolar repo](https://github.com/typicalTYLER/DeepSolar) must be present at ../DeepSolar (relative to this repo) and pre-trained weights must be present in the checkpoint directory.
-
-Lastly your Mapbox API key must be in your environment variables as MAPBOX_ACCESS_TOKEN="MY_ACCESS_TOKEN"
-
-With all that taken care of, you can simply run: 
+If you'd like to build and work out of the pre-existing Docker container, jump to the Docker container section just below. Regardless of the setup method, once you're all done you should be able to run:
 
 `python run_entire_process.py --city <city to search> --state <state>`
 
 And the whole suite of scripts should run, eventually outputting a MapRoulette challenge geoJSON for your city. (And leaving you with a sqlite database of these locations)
 
 Please create an [issue](https://github.com/typicalTYLER/SolarPanelDataWrangler/issues/new) if you have any trouble with this quickstart!
+
+## Manual Setup
+
+### Conda Environment
+
+One of the requirements is rtree, which requires you to install libspatialindex, instructions [here](http://toblerity.org/rtree/install.html).
+
+To install the environment, use the `setup/environment_cpu.yml` file, e.g.
+
+```
+conda create --name spdw --file setup/environment_cpu.yml
+```
+
+*Note*: This was created using `conda=4.6.11` and `python=3.6.8`.
+
+### DeepSolar repository
+
+Currently, [this DeepSolar repo](https://github.com/typicalTYLER/DeepSolar) must be present at ../DeepSolar (relative to this repo) and pre-trained weights must be present in the `ckpt` directory inside of the `DeepSolar` repository.
+
+### MapBox Token
+
+Your Mapbox API key must be in your environment variables as MAPBOX_ACCESS_TOKEN="MY_ACCESS_TOKEN".
+
+## Docker Setup
+
+Within the `setup` directory is a `build_docker_images.sh` file that can be used to automatically setup a docker container that works out of the box with only a single additional step (adding your Mapbox API key). Once docker is set up, you simply need to specify a username that will be used inside the docker container, e.g. 
+
+```
+bash setup/build_docker_images.sh --docker_user [specify username here]
+```
+
+After they're created, you should be able to work inside the container using the conda `spdw` environment that is set up, inside the the `repos` directory for the username you specified.
 
 # Overview
 

@@ -121,3 +121,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+## repository specific
+/data/imagery
+/data/solar.db
