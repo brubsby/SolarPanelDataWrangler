@@ -92,10 +92,16 @@ def create_clustered_maproulette_geojson(threshold=0.25, polygon_name=None, filt
     polygon_dicts = get_clustered_positive_polygon_dicts(threshold=threshold, polygon_name=polygon_name)
     if filter_existing_osm_panels:
         polygon_dicts = filter_polygon_dicts_based_off_osm_panels(polygon_dicts)
-    with open(os.path.join("data", (polygon_name or "") + "maproulette.geojson"), "w") as the_file:
+    with open(os.path.join("data", get_maproulette_geojson_filename(polygon_name)), "w") as the_file:
         for polygon_dict in polygon_dicts:
             the_file.write(GEOJSON_STRING.format(points=polygon_dict["string_points"],
                                                  confidence=polygon_dict["confidence"]))
+
+
+def get_maproulette_geojson_filename(polygon_name):
+    if not polygon_name:
+        return "maproulette.geojson"
+    return polygon_name.replace(', ', '_') + "_maproulette.geojson"
 
 
 if __name__ == "__main__":

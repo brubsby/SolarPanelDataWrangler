@@ -75,6 +75,7 @@ print("Detecting clusters of positive classification tiles.")
 run_inference.detect_clusters()
 
 print("Generating line-by-line geoJSON file that represents a MapRoulette challenge where each task is a cluster of "
-      "found panels containing no existing OSM solar nodes or ways, saved as ./data/{}.geojson".format(polygon_name))
+      "found panels containing no existing OSM solar nodes or ways, saved as ./data/{}"
+      .format(maproulette.get_maproulette_geojson_filename(polygon_name)))
 maproulette.create_clustered_maproulette_geojson(polygon_name=polygon_name, filter_existing_osm_panels=True)
 
