@@ -1,6 +1,6 @@
 # SolarPanelDataWrangler
 
-![image](https://i.imgur.com/2fJrBo2.png)
+![image](https://i.imgur.com/zahiUaU.png)
 
 This is a project containing scripts I'm using to manipulate data having to do with finding solar panels with machine learning and adding their locations to OpenStreetMap.
 
