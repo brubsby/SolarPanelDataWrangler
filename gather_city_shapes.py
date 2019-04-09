@@ -31,12 +31,26 @@ def gather(csvpath):
                     json.dump(query_nominatim_for_geojson(city, state), outfile)
 
 
-def query_nominatim_for_geojson(city, state):
+def query_nominatim_for_geojson(city=None, state=None, county=None, country=None):
+    url = "https://nominatim.openstreetmap.org/search?"
+    if city:
+        url += "city=" + city + "&"
+    if state:
+        url += "state=" + state + "&"
+    if county:
+        url += "county=" + county + "&"
+    if country:
+        url += "country=" + country + "&"
+    url += "polygon_geojson=1&format=json"
     response = requests.get(
-        "https://nominatim.openstreetmap.org/search?city=" + city + "&state=" + state
-        + "&polygon_geojson=1&format=json")
+        url)
     if response.ok:
-            return response.json()[0]['geojson']
+        response_json = response.json()
+        for single_json in response_json:
+            feature_type = single_json.get('geojson').get('type')
+            if feature_type == 'Polygon' or feature_type == 'MultiPolygon':
+                return single_json['geojson']
+        raise ValueError("No suitable polygons found for url: {}".format(url))
     else:
         raise ConnectionError(response.content)
 
@@ -61,13 +75,7 @@ if __name__ == '__main__':
                         const=True, default=False,
                         help='Run the gather portion of this script, which uses the csv input to gather geoJSON shapes'
                              'from OSM for each city/state pair')
-    parser.add_argument('--list_degenerate_cities', dest='degenerate', action='store_const',
-                        const=True, default=False,
-                        help='Run the degenerate shape finding portion of the script, finding shapes that aren\'t polygons')
     args = parser.parse_args()
 
     if args.gather:
         gather(args.csvpath)
-    if args.degenerate:
-        for city, state in get_degenerate_cities(args.csvpath):
-            print(city + ' ' + state)
