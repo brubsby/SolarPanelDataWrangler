@@ -3,11 +3,14 @@ import time
 
 import math
 import overpy
-from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, PrimaryKeyConstraint, Index, desc
+from sqlalchemy import Column, Integer, String, ForeignKey, Float, Boolean, PrimaryKeyConstraint, Index, desc, alias
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.sql import expression
+from sqlalchemy.sql.functions import count
+
+from process_city_shapes import num2deg
 
 Base = declarative_base()
 # TODO improve session management
@@ -257,3 +260,25 @@ def get_osm_pv_nodes():
     nodes = session.query(OSMSolarNode).all()
     session.close()
     return [(node.longitude, node.latitude) for node in nodes]
+
+
+def get_lat_lon_for_largest_clusters(limit=10, polygon_name=None):
+    """
+    Queries the db for largest contiguous clusters
+
+    :param limit: number of results to return
+    :param polygon_name: optional name to filter for
+    :return: list of lat_lon tuples near each cluster (exact center doesn't really matter for my use case)
+    """
+    session = Session()
+    cluster_query = session.query(SlippyTile.cluster_id).filter(SlippyTile.cluster_id.isnot(None))
+    if polygon_name:
+        cluster_query = cluster_query.filter(SlippyTile.polygon_name == polygon_name)
+    tuple_list = cluster_query.group_by(SlippyTile.cluster_id).order_by(desc(count(SlippyTile.cluster_id))).limit(
+        limit).all()
+    lat_lons = []
+    for cluster_id, in tuple_list:
+        lat_lons.append(reversed(num2deg(session.query(SlippyTile.column, SlippyTile.row).filter(
+            SlippyTile.cluster_id == cluster_id).limit(1).first())))
+    session.close()
+    return lat_lons
