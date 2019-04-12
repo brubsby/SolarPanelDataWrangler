@@ -1,9 +1,9 @@
-import argparse
-import csv
-import json
+import math
 import os
-
+import json
 import requests
+import csv
+import argparse
 
 
 def get_filename(city, state):
@@ -27,8 +27,8 @@ def get_city_state_filepaths(csvpath):
 def gather(csvpath):
     for city, state, filepath in get_city_state_filepaths(csvpath):
         if not os.path.isfile(filepath):
-            with open(filepath, 'w') as outfile:
-                json.dump(query_nominatim_for_geojson(city, state), outfile)
+                with open(filepath, 'w') as outfile:
+                    json.dump(query_nominatim_for_geojson(city, state), outfile)
 
 
 def query_nominatim_for_geojson(city=None, state=None, county=None, country=None):
