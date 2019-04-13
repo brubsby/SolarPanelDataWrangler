@@ -15,3 +15,7 @@ mapbox
 overpy
 # rtree also needs https://libspatialindex.org/#download, only necessary if running maproulette.py with filtering
 rtree
+# requirements for GDAL:
+# https://gis.stackexchange.com/questions/28966/python-gdal-package-missing-header-file-when-installing-via-pip
+# had better luck matching version with pygdal, when in docker maybe this should be GDAL though
+pygdal

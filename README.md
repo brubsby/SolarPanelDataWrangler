@@ -14,6 +14,8 @@ To install requirements, run:
 
 One of the requirements is rtree, which requires you also build libspatialindex, instructions [here](http://toblerity.org/rtree/install.html) (currently only required if you want to add filtering of existing OSM panels to your MapRoulette task to add the found panels to OSM)
 
+Another requirement is GDAL/pygdal (if using non-mapbox imagery), instructions [here](https://gis.stackexchange.com/questions/28966/python-gdal-package-missing-header-file-when-installing-via-pip)
+
 Also, currently [this DeepSolar repo](https://github.com/typicalTYLER/DeepSolar) must be present at ../DeepSolar (relative to this repo) and pre-trained weights must be present in the checkpoint directory.
 
 Lastly your Mapbox API key must be in your environment variables as MAPBOX_ACCESS_TOKEN="MY_ACCESS_TOKEN"
