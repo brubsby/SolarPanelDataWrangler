@@ -1,5 +1,7 @@
 import argparse
 import os
+import pathlib
+import imagery
 
 import geopandas
 from geojsonio import geojsonio
@@ -21,6 +23,8 @@ parser.add_argument('--city', dest='city', help='city parameter to pass to nomin
 parser.add_argument('--county', dest='county', help='county parameter to pass to nominatim')
 parser.add_argument('--state', dest='state', help='state parameter to pass to nominatim')
 parser.add_argument('--country', dest='country', help='country parameter to pass to nominatim')
+parser.add_argument('--world-file-dir', dest='world_file_dir', help='directory path of world files to use (replaces'
+                                                                    'city, state, county, country, and mapbox)')
 parser.add_argument('-q', '--no-geojsonio', dest='no_geojsonio', action='store_const', const=True, default=False,
                     help='don\'t open geojson windows')
 parser.add_argument('--classification-checkpoint', dest='classification_checkpoint',
@@ -32,42 +36,51 @@ parser.add_argument('--segmentation-checkpoint', dest='segmentation_checkpoint',
 
 args = parser.parse_args()
 
-polygon_name_params = [args.city, args.county, args.state, args.country]
-polygon_name = ', '.join([polygon_name_param for polygon_name_param in polygon_name_params if polygon_name_param])
+if args.world_file_dir:
+    if not pathlib.Path(args.world_file_dir).is_dir():
+        print("World file directory argument was not an existing directory, exiting.")
+        raise SystemExit
+    polygon_name = 'World Files'
+    imagery.process_world_files_and_images(args.world_file_dir)
 
-print("Searching OSM for a polygon for: {}".format(polygon_name))
-# Get a polygon from nomanatim for the given area parameters https://wiki.openstreetmap.org/wiki/Nominatim
-polygon = gather_city_shapes.query_nominatim_for_geojson(city=args.city, county=args.county, state=args.state,
-                                                         country=args.country)
+else:
 
-print("Checking if this search polygon is already tracked in the database.")
-# If inner coords have been calculated for this polygon, we can skip to later
-names = solardb.get_inner_coords_calculated_polygon_names()
-if polygon_name not in names:
+    polygon_name_params = [args.city, args.county, args.state, args.country]
+    polygon_name = ', '.join([polygon_name_param for polygon_name_param in polygon_name_params if polygon_name_param])
 
-    print("Found a polygon, simplifying it.")
-    # Make it simpler (makes calculation of inner grid quicker)
-    polygon = process_city_shapes.simplify_polygon(polygon)
+    print("Searching OSM for a polygon for: {}".format(polygon_name))
+    # Get a polygon from nomanatim for the given area parameters https://wiki.openstreetmap.org/wiki/Nominatim
+    polygon = gather_city_shapes.query_nominatim_for_geojson(city=args.city, county=args.county, state=args.state,
+                                                             country=args.country)
 
-    if not args.no_geojsonio:
-        # Open the simplified polygon in a web window to double check correctness
-        geojsonio.display(geopandas.GeoSeries([polygon]).to_json())
-        input("A geojson.io window has been opened with your simplified search polygon, press enter to continue if it "
-              "looks okay. If it doesn't, implement a way to edit your polygon and feed it directly to this script :)")
+    print("Checking if this search polygon is already tracked in the database.")
+    # If inner coords have been calculated for this polygon, we can skip to later
+    names = solardb.get_inner_coords_calculated_polygon_names()
+    if polygon_name not in names:
 
-    print("Calculating the coordinates of the imagery grid contained within this polygon.")
-    # This step is necessary so we know what images to query in this polygon, it also persists these in the db
-    process_city_shapes.calculate_inner_coordinates([polygon_name], [polygon], zoom=ZOOM)
+        print("Found a polygon, simplifying it.")
+        # Make it simpler (makes calculation of inner grid quicker)
+        polygon = process_city_shapes.simplify_polygon(polygon)
 
-print("Calculating the distance to the search polygon's centroid from each point if it hasn't been done before.")
-# This step is just so we have an order for which coordinates to search first (outwards from the middle)
-solardb.compute_centroid_distances()
+        if not args.no_geojsonio:
+            # Open the simplified polygon in a web window to double check correctness
+            geojsonio.display(geopandas.GeoSeries([polygon]).to_json())
+            input("A geojson.io window has been opened with your simplified search polygon, press enter to continue if it "
+                  "looks okay. If it doesn't, implement a way to edit your polygon and feed it directly to this script :)")
 
-print("Running classification on every tile in the search polygon that hasn't had inference ran yet.")
+        print("Calculating the coordinates of the imagery grid contained within this polygon.")
+        # This step is necessary so we know what images to query in this polygon, it also persists these in the db
+        process_city_shapes.calculate_inner_coordinates([polygon_name], [polygon], zoom=ZOOM)
+
+    print("Calculating the distance to the search polygon's centroid from each point if it hasn't been done before.")
+    # This step is just so we have an order for which coordinates to search first (outwards from the middle)
+    solardb.compute_centroid_distances()
+
+print("Running classification on every tile in the search area that hasn't had inference ran yet.")
 # You should be able to SIGINT at this point if it's taking forever and it should pick up where it left off if you do
 run_inference.run_classification(args.classification_checkpoint, args.segmentation_checkpoint, BATCHES_BETWEEN_DELETE)
 
-print("Querying OpenStreetMap for existing solar panels in this search polygon.")
+print("Querying OpenStreetMap for existing solar panels in this search area.")
 # This will requery every time, but it's good because you want your task to filter the newly added panels out.
 solardb.query_and_persist_osm_solar([shape(polygon)])
 

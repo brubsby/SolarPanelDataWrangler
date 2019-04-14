@@ -1,5 +1,6 @@
 import os
 import pathlib
+import subprocess
 import time
 from io import BytesIO
 
@@ -31,25 +32,35 @@ class ImageTile(object):
         """Strip path and extension. Return base filename."""
         return get_basename(self.filename)
 
-    def generate_filename(self, zoom=21, directory=os.path.join(os.getcwd(), 'data', 'imagery'),
-                          format='jpg', path=True):
-        """Construct and return a filename for this tile."""
+    def generate_filename(self, zoom=21, directory=None, source='mapbox', format='jpg', path=True):
+        """
+        Construct and return a filepath for this tile.
+
+        :param zoom: zoom level of this tile
+        :param directory: directory to store this tile image in
+        :param source: imagery source, used in determining directory to store in
+        :param format: image format type
+        :param path: boolean to determine whether to return filepath or filename
+        :return:
+        """
+        if not directory:
+            directory = os.path.join(os.getcwd(), 'data', 'imagery', source)
         filename = os.path.join(str(zoom), str(self.row), str(self.column) +
                                 '.{ext}'.format(ext=format.lower().replace('jpeg', 'jpg')))
         if not path:
             return filename
         return os.path.join(directory, filename)
 
-    def save(self, filename=None, file_format='jpeg', zoom=21):
+    def save(self, filename=None, file_format='jpeg', zoom=21, source='mapbox'):
         if not filename:
-            filename = self.generate_filename(zoom=zoom)
+            filename = self.generate_filename(zoom=zoom, source=source)
         pathlib.Path(os.path.dirname(filename)).mkdir(parents=True, exist_ok=True)
         self.image.save(filename, file_format)
         self.filename = filename
 
-    def load(self, filename=None, zoom=21):
+    def load(self, filename=None, zoom=21, source='mapbox'):
         if not filename:
-            filename = self.generate_filename(zoom=zoom)
+            filename = self.generate_filename(zoom=zoom, source=source)
         if self.image:
             return self.image
         if not pathlib.Path(filename).is_file():
@@ -58,9 +69,9 @@ class ImageTile(object):
         self.image = Image.open(filename)
         return self.image
 
-    def delete(self, filename=None, zoom=21):  # TODO zoom should probably be a tile property
+    def delete(self, filename=None, zoom=21, source='mapbox'):  # TODO zoom should probably be a tile property
         if not filename:
-            filename = self.generate_filename(zoom=zoom)
+            filename = self.generate_filename(zoom=zoom, source=source)
         pathlib.Path(filename).unlink()
         self.filename = filename
 
@@ -143,8 +154,22 @@ MAX_RETRIES = 12  # max wait time with exponential backoff would be ~34 minutes
 service = Static()
 
 
-def gather_and_persist_imagery_at_coordinate(slippy_coordinates, final_zoom=FINAL_ZOOM, grid_size=GRID_SIZE,
-                                             imagery="mapbox"):
+def process_world_files_and_images(directory_path):
+    """
+    Takes in a directory path containing jpg and jgw files, creates a virtual database file for their mosaic, and then
+    generates zoom level 21 slippy tiles for them and places them in data/imagery/world_file/21/
+
+    :param directory_path: path to jpg and jgw files
+    """
+    subprocess.call(["gdalbuildvrt", str(pathlib.Path(directory_path, "mosaic.vrt")),
+                     str(pathlib.Path(directory_path, "*.jpg"))])
+    subprocess.call(["python", "gdal2tilesp.py", "-r", "lanczos", "-w", "none", "-z", "21", "-f", "JPEG", "-o", "xyz",
+                     "-s", "3857", str(pathlib.Path(directory_path, "mosaic.vrt")), "data/imagery/world_file"])
+    pass
+    # TODO add untracked imagery to database
+
+
+def gather_and_persist_mapbox_imagery_at_coordinate(slippy_coordinates, final_zoom=FINAL_ZOOM, grid_size=GRID_SIZE):
     # the top left square of the query grid this point belongs to
     base_coords = tuple(map(lambda x: x - x % grid_size, slippy_coordinates))
     if grid_size % 2 == 0:
@@ -155,30 +180,26 @@ def gather_and_persist_imagery_at_coordinate(slippy_coordinates, final_zoom=FINA
         # if the grid is odd, the center point is in the center of the center square
         center_tile = tuple(map(lambda x: x + grid_size // 2, base_coords))
         center_lon_lat = num2deg(center_tile, zoom=FINAL_ZOOM, center=True)
-    if imagery == "mapbox":
-        for i in range(MAX_RETRIES):
-            response = service.image('mapbox.satellite', lon=center_lon_lat[0], lat=center_lon_lat[1], z=final_zoom - 2,
-                                     width=MAX_IMAGE_SIDE_LENGTH, height=MAX_IMAGE_SIDE_LENGTH, image_format='jpg90',
-                                     retina=(ZOOM_FACTOR > 0))
-            if response.ok:
-                image = Image.open(BytesIO(response.content))
-                tiles = slice_image(image, base_coords, upsample_count=max(ZOOM_FACTOR - 1, 0),
-                                    slices_per_side=grid_size)
-                to_return = None
-                for tile in tiles:
-                    if tile.coords == slippy_coordinates:
-                        to_return = tile.image
-                    tile.save(zoom=FINAL_ZOOM)
-                solardb.mark_has_imagery(base_coords, grid_size, zoom=final_zoom)
-                return to_return
-            backoff_time = pow(2, i)
-            print('Got this response from {service}:"{error}", exponentially backing off, {time} seconds.'
-                  .format(service=imagery, error=getattr(response, "content", None), time=backoff_time))
-            time.sleep(backoff_time)
-        raise ConnectionError("Couldn't connect to {service} after {retries}"
-                              .format(service=imagery, retries=MAX_RETRIES))
-    else:
-        AttributeError("Unsupported Imagery source: " + str(imagery))
+    for i in range(MAX_RETRIES):
+        response = service.image('mapbox.satellite', lon=center_lon_lat[0], lat=center_lon_lat[1], z=final_zoom - 2,
+                                 width=MAX_IMAGE_SIDE_LENGTH, height=MAX_IMAGE_SIDE_LENGTH, image_format='jpg90',
+                                 retina=(ZOOM_FACTOR > 0))
+        if response.ok:
+            image = Image.open(BytesIO(response.content))
+            tiles = slice_image(image, base_coords, upsample_count=max(ZOOM_FACTOR - 1, 0),
+                                slices_per_side=grid_size)
+            to_return = None
+            for tile in tiles:
+                if tile.coords == slippy_coordinates:
+                    to_return = tile.image
+                tile.save(zoom=FINAL_ZOOM)
+            solardb.mark_has_imagery(base_coords, grid_size, zoom=final_zoom)
+            return to_return
+        backoff_time = pow(2, i)
+        print('Got this response from mapbox:"{error}", exponentially backing off, {time} seconds.'
+              .format(error=getattr(response, "content", None), time=backoff_time))
+        time.sleep(backoff_time)
+    raise ConnectionError("Couldn't connect to mapbox after {retries}".format(retries=MAX_RETRIES))
 
 
 # loads image from disk if possible, otherwise queries an imagery service
@@ -186,7 +207,7 @@ def get_image_for_coordinate(slippy_coordinate):
     tile = ImageTile(None, slippy_coordinate)
     image = tile.load()
     if not image:
-        image = gather_and_persist_imagery_at_coordinate(slippy_coordinate, final_zoom=FINAL_ZOOM)
+        image = gather_and_persist_mapbox_imagery_at_coordinate(slippy_coordinate, final_zoom=FINAL_ZOOM)
     return image
 
 
