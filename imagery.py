@@ -161,10 +161,10 @@ def process_world_files_and_images(directory_path):
 
     :param directory_path: path to jpg and jgw files
     """
-    subprocess.call(["gdalbuildvrt", str(pathlib.Path(directory_path, "mosaic.vrt")),
+    subprocess.call(["gdalbuildvrt", str(pathlib.Path(directory_path, "-overwrite", "mosaic.vrt")),
                      str(pathlib.Path(directory_path, "*.jpg"))])
     subprocess.call(["python", "gdal2tilesp.py", "-r", "lanczos", "-w", "none", "-z", "21", "-f", "JPEG", "-o", "xyz",
-                     "-s", "3857", str(pathlib.Path(directory_path, "mosaic.vrt")), "data/imagery/world_file"])
+                     "-s", "EPSG:27700", str(pathlib.Path(directory_path, "mosaic.vrt")), "data/imagery/world_file"])
     pass
     # TODO add untracked imagery to database
 
