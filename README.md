@@ -8,23 +8,59 @@ I've chosen to use SQLite and SQLAlchemy for persisting the search locations and
 
 # Quickstart
 
-To install requirements, run:
-
-`pip install -r requirements.txt`
-
-One of the requirements is rtree, which requires you also build libspatialindex, instructions [here](http://toblerity.org/rtree/install.html) (currently only required if you want to add filtering of existing OSM panels to your MapRoulette task to add the found panels to OSM)
-
-Also, currently [this DeepSolar repo](https://github.com/typicalTYLER/DeepSolar) must be present at ../DeepSolar (relative to this repo) and pre-trained weights must be present in the checkpoint directory.
-
-Lastly your Mapbox API key must be in your environment variables as MAPBOX_ACCESS_TOKEN="MY_ACCESS_TOKEN"
-
-With all that taken care of, you can simply run: 
+If you'd like to build and work out of the pre-existing Docker container, jump to the Docker container section just below. Regardless of the setup method, once you're all done you should be able to run:
 
 `python run_entire_process.py --city <city to search> --state <state>`
 
 And the whole suite of scripts should run, eventually outputting a MapRoulette challenge geoJSON for your city. (And leaving you with a sqlite database of these locations)
 
 Please create an [issue](https://github.com/typicalTYLER/SolarPanelDataWrangler/issues/new) if you have any trouble with this quickstart!
+
+## Manual Setup
+
+### Conda Environment
+
+One of the requirements is rtree, which requires you to install libspatialindex, instructions [here](http://toblerity.org/rtree/install.html).
+
+To install the environment, choose either the `setup/environment_cpu.yml` and `setup/environment_gpu.yml`. If you have a GPU that you intend to use, you'll need to setup the relevant packages / drivers (e.g. cuDNN / CUDA, NVIDIA diver, etc.) before installing the conda environment. Once you've chosen a YML file, you can create the environment via something like the following:
+
+```
+conda create --name spdw --file setup/environment_cpu.yml
+```
+
+*Note*: These environments are built on `conda=4.6.11`, `python=3.6.8`, and `tensorflow=1.12.0`.
+
+### DeepSolar repository
+
+Currently, [this DeepSolar repo](https://github.com/typicalTYLER/DeepSolar) must be present at ../DeepSolar (relative to this repo) and pre-trained weights must be present in the `ckpt` directory inside of the `DeepSolar` repository.
+
+### MapBox Token
+
+Your Mapbox API key must be in your environment variables as MAPBOX_ACCESS_TOKEN="MY_ACCESS_TOKEN".
+
+## Docker Setup
+
+Within the `setup` directory is a `build_docker_images.sh` script that can be used to automatically setup a docker container to develop out of.
+
+### No GPU Build 
+
+To build a docker image that uses the no GPU conda environment, first install docker. Next, choose a username that you would like to use inside the container, and from **within the setup directory**, run:
+
+```
+bash build_docker_images.sh --docker_user [specify username here]
+```
+
+Once the image is built, you should be able to work inside a container created from the image just as if you were logged into a remote instance.
+
+### GPU Build 
+
+To build a docker image that uses  the GPU conda environment, first install nvidia-docker (version 2.0). Next, make sure that you have the appropriate GPU driver installed for your system and for the version of tensorflow that will be used (`1.12.0`) as well as the versions of CUDA and cuDNN (CUDA 9.0 and cuDNN7. Once that is done, choose a username that you would like to use inside the container, and from **within the setup directory**, run:
+
+```
+bash build_docker_images.sh --docker_user [specify username here] --gpu_build
+```
+
+Once the image is built, you should be able to work inside a container created from the image just as if you were logged into a remote instance.
 
 # Overview
 
