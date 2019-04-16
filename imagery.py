@@ -181,24 +181,38 @@ def gather_and_persist_mapbox_imagery_at_coordinate(slippy_coordinates, final_zo
         center_tile = tuple(map(lambda x: x + grid_size // 2, base_coords))
         center_lon_lat = num2deg(center_tile, zoom=FINAL_ZOOM, center=True)
     for i in range(MAX_RETRIES):
-        response = service.image('mapbox.satellite', lon=center_lon_lat[0], lat=center_lon_lat[1], z=final_zoom - 2,
-                                 width=MAX_IMAGE_SIDE_LENGTH, height=MAX_IMAGE_SIDE_LENGTH, image_format='jpg90',
-                                 retina=(ZOOM_FACTOR > 0))
-        if response.ok:
-            image = Image.open(BytesIO(response.content))
-            tiles = slice_image(image, base_coords, upsample_count=max(ZOOM_FACTOR - 1, 0),
-                                slices_per_side=grid_size)
-            to_return = None
-            for tile in tiles:
-                if tile.coords == slippy_coordinates:
-                    to_return = tile.image
-                tile.save(zoom=FINAL_ZOOM)
-            solardb.mark_has_imagery(base_coords, grid_size, zoom=final_zoom)
-            return to_return
-        backoff_time = pow(2, i)
-        print('Got this response from mapbox:"{error}", exponentially backing off, {time} seconds.'
-              .format(error=getattr(response, "content", None), time=backoff_time))
-        time.sleep(backoff_time)
+        try:
+            response = service.image('mapbox.satellite', lon=center_lon_lat[0], lat=center_lon_lat[1], z=final_zoom - 2,
+                                     width=MAX_IMAGE_SIDE_LENGTH, height=MAX_IMAGE_SIDE_LENGTH, image_format='jpg90',
+                                     retina=(ZOOM_FACTOR > 0))
+            if response.ok:
+                image = Image.open(BytesIO(response.content))
+                tiles = slice_image(image, base_coords, upsample_count=max(ZOOM_FACTOR - 1, 0),
+                                    slices_per_side=grid_size)
+                to_return = None
+                for tile in tiles:
+                    if tile.coords == slippy_coordinates:
+                        to_return = tile.image
+                    tile.save(zoom=FINAL_ZOOM)
+                solardb.mark_has_imagery(base_coords, grid_size, zoom=final_zoom)
+                return to_return
+            backoff_time = pow(2, i)
+            print('Got this response from mapbox:"{error}", exponentially backing off, {time} seconds.'
+                  .format(error=getattr(response, "content", None), time=backoff_time))
+            time.sleep(backoff_time)
+        except ConnectionError as e:
+            backoff_time = pow(2, i)
+            print('Got an connection error when trying to query and process imagery, exponentially backing off, '
+                  '{time} seconds.'.format(error=repr(e), time=backoff_time))
+            time.sleep(backoff_time)
+        except OSError as e:
+            if "image file is truncated" in str(e):
+                backoff_time = pow(2, i)
+                print('Got an OSError:"{error}" when trying to query and process imagery, exponentially backing off, '
+                      '{time} seconds.'.format(error=repr(e), time=backoff_time))
+                time.sleep(backoff_time)
+            else:
+                raise e
     raise ConnectionError("Couldn't connect to mapbox after {retries}".format(retries=MAX_RETRIES))
 
 
