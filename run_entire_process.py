@@ -63,9 +63,9 @@ else:
         polygon = process_city_shapes.simplify_polygon(polygon)
 
         if not args.no_geojsonio:
-            # Open the simplified polygon in a web window to double check correctness
-            geojsonio.display(geopandas.GeoSeries([polygon]).to_json())
-            input("A geojson.io window has been opened with your simplified search polygon, press enter to continue if it "
+            # Create a link to geojsonio for the polygon  to double check correctness
+            print(geojsonio.make_url(geopandas.GeoSeries([polygon]).to_json()))
+            input("A geojson.io link has been created with your simplified search polygon, press enter to continue if it "
                   "looks okay. If it doesn't, implement a way to edit your polygon and feed it directly to this script :)")
 
         print("Calculating the coordinates of the imagery grid contained within this polygon.")
