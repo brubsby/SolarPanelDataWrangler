@@ -3,9 +3,11 @@ import pathlib
 import subprocess
 import time
 from io import BytesIO
+import glob
 
 from PIL import Image
 from mapbox import Static
+from osgeo import gdal
 
 import solardb
 from process_city_shapes import num2deg
@@ -161,10 +163,31 @@ def process_world_files_and_images(directory_path):
 
     :param directory_path: path to jpg and jgw files
     """
-    subprocess.call(["gdalbuildvrt", str(pathlib.Path(directory_path, "-overwrite", "mosaic.vrt")),
-                     str(pathlib.Path(directory_path, "*.jpg"))])
-    subprocess.call(["python", "gdal2tilesp.py", "-r", "lanczos", "-w", "none", "-z", "21", "-f", "JPEG", "-o", "xyz",
-                     "-s", "EPSG:27700", str(pathlib.Path(directory_path, "mosaic.vrt")), "data/imagery/world_file"])
+    start_time = time.time()
+    mosaic_file_path = pathlib.Path(directory_path, "mosaic.vrt")
+    mosaic2_file_path = pathlib.Path(directory_path, "mosaic2.vrt")
+    mosaic3_file_path = pathlib.Path(directory_path, "mosaic3.vrt")
+    mosaic_file_path_str = str(mosaic_file_path)
+    mosaic2_file_path_str = str(mosaic2_file_path)
+    mosaic3_file_path_str = str(mosaic3_file_path)
+
+    files = glob.glob(str(pathlib.Path(directory_path, "*.jpg")))
+
+    subprocess.call(["gdalbuildvrt", "-overwrite", mosaic_file_path_str, *files])
+    data_set = gdal.Open(mosaic_file_path_str)
+    data_set_band = data_set.GetRasterBand(1)
+    output_y_size = data_set_band.YSize * 4
+    output_x_size = data_set_band.XSize * 4
+    subprocess.call(["gdalwarp", "-overwrite", "-r", "bilinear", "-ts", str(output_x_size), str(output_y_size), "-of",
+                     "vrt", mosaic_file_path_str, mosaic2_file_path_str])
+    output_y_size = output_y_size * 2
+    output_x_size = output_x_size * 2
+    subprocess.call(["gdalwarp", "-overwrite", "-r", "bilinear", "-ts", str(output_x_size), str(output_y_size), "-of",
+                     "vrt", mosaic2_file_path_str, mosaic3_file_path_str])
+    subprocess.call(["python", "gdal2tilesp.py", "-w", "none", "-z", "21", "-f", "JPEG", "-o", "xyz",
+                     "-s", "EPSG:27700", mosaic3_file_path_str, "data/imagery/world_file"])
+
+    print("finished in {} seconds".format(time.time()-start_time))
     pass
     # TODO add untracked imagery to database
 
