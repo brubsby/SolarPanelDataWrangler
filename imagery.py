@@ -5,7 +5,7 @@ import time
 from io import BytesIO
 import glob
 
-from PIL import Image
+from PIL import Image, ImageChops
 from mapbox import Static
 from osgeo import gdal
 
@@ -156,6 +156,34 @@ MAX_RETRIES = 12  # max wait time with exponential backoff would be ~34 minutes
 service = Static()
 
 
+def delete_blank_tiles(source="world_file", extensions=None):
+    """
+    Deletes all blank image tiles (for a jpeg, this is just an all black image) in the data/imagery/<source> directory
+
+    :param source: imagery subdirectory name to delete images in
+    :param extensions: iterable list of file extensions to delete
+    """
+    print("Deleting blank tile imagery...")
+    start_time = time.time()
+    if extensions is None:
+        extensions = ("jpg", "jpeg", "png")
+    else:
+        extensions = tuple(extensions)
+    for dir_entry in os.scandir(os.path.join('data', 'imagery', source)):
+        if dir_entry.is_dir() and dir_entry.name.isdecimal():  # confirm is zoom directory
+            for zoom_dir_entry in os.scandir(os.path.join('data', 'imagery', source, dir_entry.name)):
+                if zoom_dir_entry.is_dir():
+                    for column_dir_entry in \
+                            os.scandir(os.path.join('data', 'imagery', source, dir_entry.name, zoom_dir_entry.name)):
+                        if column_dir_entry.is_file() and column_dir_entry.name.lower().endswith(extensions):
+                            image_path = os.path.join('data', 'imagery', source, dir_entry.name, zoom_dir_entry.name,
+                                                      column_dir_entry.name)
+                            image = Image.open(image_path)
+                            if not ImageChops.invert(image).getbbox():
+                                os.remove(image_path)
+    print("Finished deleting blank tile imagery in {} seconds".format(time.time()-start_time))
+
+
 def process_world_files_and_images(directory_path):
     """
     Takes in a directory path containing jpg and jgw files, creates a virtual database file for their mosaic, and then
@@ -163,6 +191,7 @@ def process_world_files_and_images(directory_path):
 
     :param directory_path: path to jpg and jgw files
     """
+    print("Importing imagery from {}".format(directory_path))
     start_time = time.time()
     mosaic_file_path = pathlib.Path(directory_path, "mosaic.vrt")
     mosaic2_file_path = pathlib.Path(directory_path, "mosaic2.vrt")
@@ -176,19 +205,19 @@ def process_world_files_and_images(directory_path):
     subprocess.call(["gdalbuildvrt", "-overwrite", mosaic_file_path_str, *files])
     data_set = gdal.Open(mosaic_file_path_str)
     data_set_band = data_set.GetRasterBand(1)
-    output_y_size = data_set_band.YSize * 4
-    output_x_size = data_set_band.XSize * 4
+    output_y_size = data_set_band.YSize * 2
+    output_x_size = data_set_band.XSize * 2
     subprocess.call(["gdalwarp", "-overwrite", "-r", "bilinear", "-ts", str(output_x_size), str(output_y_size), "-of",
                      "vrt", mosaic_file_path_str, mosaic2_file_path_str])
     output_y_size = output_y_size * 2
     output_x_size = output_x_size * 2
     subprocess.call(["gdalwarp", "-overwrite", "-r", "bilinear", "-ts", str(output_x_size), str(output_y_size), "-of",
                      "vrt", mosaic2_file_path_str, mosaic3_file_path_str])
-    subprocess.call(["python", "gdal2tilesp.py", "-w", "none", "-z", "21", "-f", "JPEG", "-o", "xyz",
+    subprocess.call(["python", "gdal2tilesp.py", "-e", "-w", "none", "-z", "21", "-f", "JPEG", "-o", "xyz",
                      "-s", "EPSG:27700", mosaic3_file_path_str, "data/imagery/world_file"])
 
-    print("finished in {} seconds".format(time.time()-start_time))
-    pass
+    print("Finished importing, upsampling, and tiling imagery in {} seconds".format(time.time()-start_time))
+    delete_blank_tiles("world_file")
     # TODO add untracked imagery to database
 
 
