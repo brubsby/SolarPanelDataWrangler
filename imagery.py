@@ -12,6 +12,8 @@ from osgeo import gdal
 import solardb
 from process_city_shapes import num2deg
 
+DEFAULT_TILE_EXTENSIONS = ("jpg", "jpeg", "png")
+
 
 class ImageTile(object):
     """Represents a single image tile."""
@@ -156,35 +158,20 @@ MAX_RETRIES = 12  # max wait time with exponential backoff would be ~34 minutes
 service = Static()
 
 
-def delete_blank_tiles(source="world_file", extensions=None):
+def process_world_files_and_images(directory_path, imagery_dir="world_file"):
     """
-    Deletes all blank image tiles (for a jpeg, this is just an all black image) in the data/imagery/<source> directory
+    Given a directory path to world files, split into tiles and track in the database
 
-    :param source: imagery subdirectory name to delete images in
-    :param extensions: iterable list of file extensions to delete
+    :param directory_path: directory to world files
+    :param imagery_dir: imagery subdirectory to store tiles in
     """
-    print("Deleting blank tile imagery...")
-    start_time = time.time()
-    if extensions is None:
-        extensions = ("jpg", "jpeg", "png")
-    else:
-        extensions = tuple(extensions)
-    for dir_entry in os.scandir(os.path.join('data', 'imagery', source)):
-        if dir_entry.is_dir() and dir_entry.name.isdecimal():  # confirm is zoom directory
-            for zoom_dir_entry in os.scandir(os.path.join('data', 'imagery', source, dir_entry.name)):
-                if zoom_dir_entry.is_dir():
-                    for column_dir_entry in \
-                            os.scandir(os.path.join('data', 'imagery', source, dir_entry.name, zoom_dir_entry.name)):
-                        if column_dir_entry.is_file() and column_dir_entry.name.lower().endswith(extensions):
-                            image_path = os.path.join('data', 'imagery', source, dir_entry.name, zoom_dir_entry.name,
-                                                      column_dir_entry.name)
-                            image = Image.open(image_path)
-                            if not ImageChops.invert(image).getbbox():
-                                os.remove(image_path)
-    print("Finished deleting blank tile imagery in {} seconds".format(time.time()-start_time))
+    create_tiles_from_world_file_dir(directory_path)
+    delete_blank_tiles(imagery_dir)
+    add_imagery(imagery_dir)
+    pass
 
 
-def process_world_files_and_images(directory_path):
+def create_tiles_from_world_file_dir(directory_path):
     """
     Takes in a directory path containing jpg and jgw files, creates a virtual database file for their mosaic, and then
     generates zoom level 21 slippy tiles for them and places them in data/imagery/world_file/21/
@@ -199,9 +186,7 @@ def process_world_files_and_images(directory_path):
     mosaic_file_path_str = str(mosaic_file_path)
     mosaic2_file_path_str = str(mosaic2_file_path)
     mosaic3_file_path_str = str(mosaic3_file_path)
-
     files = glob.glob(str(pathlib.Path(directory_path, "*.jpg")))
-
     subprocess.call(["gdalbuildvrt", "-overwrite", mosaic_file_path_str, *files])
     data_set = gdal.Open(mosaic_file_path_str)
     data_set_band = data_set.GetRasterBand(1)
@@ -215,10 +200,62 @@ def process_world_files_and_images(directory_path):
                      "vrt", mosaic2_file_path_str, mosaic3_file_path_str])
     subprocess.call(["python", "gdal2tilesp.py", "-e", "-w", "none", "-z", "21", "-f", "JPEG", "-o", "xyz",
                      "-s", "EPSG:27700", mosaic3_file_path_str, "data/imagery/world_file"])
+    print("Finished importing, upsampling, and tiling imagery in {} seconds".format(time.time() - start_time))
 
-    print("Finished importing, upsampling, and tiling imagery in {} seconds".format(time.time()-start_time))
-    delete_blank_tiles("world_file")
-    # TODO add untracked imagery to database
+
+def delete_blank_tiles(imagery_dir="world_file", extensions=None):
+    """
+    Deletes all blank image tiles (for a jpeg, this is just an all black image) in the data/imagery/<source> directory
+
+    :param imagery_dir: imagery subdirectory name to delete images in
+    :param extensions: iterable list of file extensions to delete
+    """
+    print("Deleting blank tile imagery...")
+    start_time = time.time()
+    if extensions is None:
+        extensions = DEFAULT_TILE_EXTENSIONS
+    else:
+        extensions = tuple(extensions)
+    for dir_entry in os.scandir(os.path.join('data', 'imagery', imagery_dir)):
+        if dir_entry.is_dir() and dir_entry.name.isdecimal():  # confirm is zoom directory
+            for zoom_dir_entry in os.scandir(os.path.join('data', 'imagery', imagery_dir, dir_entry.name)):
+                if zoom_dir_entry.is_dir():
+                    for column_dir_entry in \
+                            os.scandir(os.path.join('data', 'imagery', imagery_dir, dir_entry.name, zoom_dir_entry.name)):
+                        if column_dir_entry.is_file() and column_dir_entry.name.lower().endswith(extensions):
+                            image_path = os.path.join('data', 'imagery', imagery_dir, dir_entry.name, zoom_dir_entry.name,
+                                                      column_dir_entry.name)
+                            image = Image.open(image_path)
+                            if not ImageChops.invert(image).getbbox():
+                                os.remove(image_path)
+    print("Finished deleting blank tile imagery in {} seconds".format(time.time()-start_time))
+
+
+def add_imagery(imagery_dir="world_file", extensions=None):
+    """
+    Adds all tiles to the database in the given imagery_dir
+
+    :param imagery_dir: imagery subdirectory name to delete images in
+    :param extensions: iterable list of file extensions to add
+    """
+    print("Adding tile imagery to solar.db...")
+    start_time = time.time()
+    if extensions is None:
+        extensions = DEFAULT_TILE_EXTENSIONS
+    else:
+        extensions = tuple(extensions)
+    solardb.persist_polygon("world_file")
+    tiles = set()
+    for dir_entry in os.scandir(os.path.join('data', 'imagery', imagery_dir)):
+        if dir_entry.is_dir() and dir_entry.name.isdecimal():  # confirm is zoom directory
+            for zoom_dir_entry in os.scandir(os.path.join('data', 'imagery', imagery_dir, dir_entry.name)):
+                if zoom_dir_entry.is_dir():
+                    for column_dir_entry in \
+                            os.scandir(os.path.join('data', 'imagery', imagery_dir, dir_entry.name, zoom_dir_entry.name)):
+                        if column_dir_entry.is_file() and column_dir_entry.name.lower().endswith(extensions):
+                            tiles.add((int(zoom_dir_entry.name), int(os.path.splitext(column_dir_entry.name)[0])))
+            solardb.persist_coords("world_file", tiles, zoom=int(dir_entry.name), has_image=True)
+    print("Finished adding tiles to solar.db in {} seconds".format(time.time()-start_time))
 
 
 def gather_and_persist_mapbox_imagery_at_coordinate(slippy_coordinates, final_zoom=FINAL_ZOOM, grid_size=GRID_SIZE):

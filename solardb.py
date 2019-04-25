@@ -80,7 +80,16 @@ def persist_polygons(names_and_polygons, zoom=21):
     session.close()
 
 
-def persist_coords(polygon_name, coords, zoom=21, batch_size=100000):
+def persist_polygon(name, centroid_x=0, centroid_y=0, zoom=21):
+    session = Session()
+    exists = session.query(SearchPolygon).filter(SearchPolygon.name == name).first()
+    if not exists:
+        session.add(SearchPolygon(name=name, centroid_column=centroid_x, centroid_row=centroid_y, centroid_zoom=zoom))
+    session.commit()
+    session.close()
+
+
+def persist_coords(polygon_name, coords, zoom=21, batch_size=100000, has_image=False):
     start_time = time.time()
     session = Session()
     tiles_to_add = []
@@ -89,7 +98,8 @@ def persist_coords(polygon_name, coords, zoom=21, batch_size=100000):
             session.add_all(tiles_to_add)
             session.commit()
             tiles_to_add = []
-        tiles_to_add.append(SlippyTile(polygon_name=polygon_name, column=coord[0], row=coord[1], zoom=zoom))
+        tiles_to_add.append(
+            SlippyTile(polygon_name=polygon_name, column=coord[0], row=coord[1], zoom=zoom, has_image=has_image))
     session.add_all(tiles_to_add)
     session.query(SearchPolygon).filter(SearchPolygon.name == polygon_name).first().inner_coords_calculated = True
     session.commit()
