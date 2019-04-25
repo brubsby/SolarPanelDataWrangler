@@ -72,9 +72,9 @@ else:
         # This step is necessary so we know what images to query in this polygon, it also persists these in the db
         process_city_shapes.calculate_inner_coordinates([polygon_name], [polygon], zoom=ZOOM)
 
-    print("Calculating the distance to the search polygon's centroid from each point if it hasn't been done before.")
-    # This step is just so we have an order for which coordinates to search first (outwards from the middle)
-    solardb.compute_centroid_distances()
+print("Calculating the distance to the search polygon's centroid from each point if it hasn't been done before.")
+# This step is just so we have an order for which coordinates to search first (outwards from the middle)
+solardb.compute_centroid_distances()
 
 print("Running classification on every tile in the search area that hasn't had inference ran yet.")
 # You should be able to SIGINT at this point if it's taking forever and it should pick up where it left off if you do

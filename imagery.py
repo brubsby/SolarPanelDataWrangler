@@ -165,10 +165,10 @@ def process_world_files_and_images(directory_path, imagery_dir="world_file"):
     :param directory_path: directory to world files
     :param imagery_dir: imagery subdirectory to store tiles in
     """
+    # TODO delete existing world file imagery before starting, resume flag on gdal2tilesp.py doesn't work
     create_tiles_from_world_file_dir(directory_path)
     delete_blank_tiles(imagery_dir)
     add_imagery(imagery_dir)
-    pass
 
 
 def create_tiles_from_world_file_dir(directory_path):
@@ -198,7 +198,7 @@ def create_tiles_from_world_file_dir(directory_path):
     output_x_size = output_x_size * 2
     subprocess.call(["gdalwarp", "-overwrite", "-r", "bilinear", "-ts", str(output_x_size), str(output_y_size), "-of",
                      "vrt", mosaic2_file_path_str, mosaic3_file_path_str])
-    subprocess.call(["python", "gdal2tilesp.py", "-e", "-w", "none", "-z", "21", "-f", "JPEG", "-o", "xyz",
+    subprocess.call(["python", "gdal2tilesp.py", "-w", "none", "-z", "21", "-f", "JPEG", "-o", "xyz",
                      "-s", "EPSG:27700", mosaic3_file_path_str, "data/imagery/world_file"])
     print("Finished importing, upsampling, and tiling imagery in {} seconds".format(time.time() - start_time))
 
