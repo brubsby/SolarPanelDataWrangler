@@ -69,8 +69,9 @@ else:
         if not args.no_geojsonio:
             # Create a link to geojsonio for the polygon  to double check correctness
             print(geojsonio.make_url(geopandas.GeoSeries([polygon]).to_json()))
-            input("A geojson.io link has been created with your simplified search polygon, press enter to continue if it "
-                  "looks okay. If it doesn't, implement a way to edit your polygon and feed it directly to this script :)")
+            input("A geojson.io link has been created with your simplified search polygon, press enter to continue if "
+                  "it looks okay. If it doesn't, implement a way to edit your polygon and feed it directly to this "
+                  "script :)")
 
         print("Calculating the coordinates of the imagery grid contained within this polygon.")
         # This step is necessary so we know what images to query in this polygon, it also persists these in the db
