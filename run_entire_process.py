@@ -25,6 +25,9 @@ parser.add_argument('--state', dest='state', help='state parameter to pass to no
 parser.add_argument('--country', dest='country', help='country parameter to pass to nominatim')
 parser.add_argument('--world-file-dir', dest='world_file_dir', help='directory path of world files to use (replaces'
                                                                     'city, state, county, country, and mapbox)')
+parser.add_argument('--skip-tile-generation', dest='skip_tile_generation', action='store_const', const=True,
+                    default=False, help='When supplying imagery yourself, provide this flag to bypass regeneration of '
+                                        'imagery (if you\'ve done it before)')
 parser.add_argument('-q', '--no-geojsonio', dest='no_geojsonio', action='store_const', const=True, default=False,
                     help='don\'t open geojson windows')
 parser.add_argument('--classification-checkpoint', dest='classification_checkpoint',
@@ -41,7 +44,8 @@ if args.world_file_dir:
         print("World file directory argument was not an existing directory, exiting.")
         raise SystemExit
     polygon_name = 'World Files'
-    imagery.process_world_files_and_images(args.world_file_dir)
+    if not args.skip_tile_generation:
+        imagery.process_world_files_and_images(args.world_file_dir)
 
 else:
 
