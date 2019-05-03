@@ -104,7 +104,7 @@ def persist_coords(polygon_name, coords, zoom=21, batch_size=100000, has_image=F
     session.query(SearchPolygon).filter(SearchPolygon.name == polygon_name).first().inner_coords_calculated = True
     session.commit()
     session.close()
-    print(str(time.time() - start_time) + " seconds to complete inner grid persistence for " + polygon_name)
+    print(str(time.time() - start_time) + " seconds to complete coordinate persistence for " + polygon_name)
 
 
 def get_polygon_names():

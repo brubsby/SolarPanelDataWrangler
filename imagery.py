@@ -1,9 +1,10 @@
+import glob
 import os
 import pathlib
+import shutil
 import subprocess
 import time
 from io import BytesIO
-import glob
 
 from PIL import Image, ImageChops
 from mapbox import Static
@@ -165,10 +166,24 @@ def process_world_files_and_images(directory_path, imagery_dir="world_file"):
     :param directory_path: directory to world files
     :param imagery_dir: imagery subdirectory to store tiles in
     """
-    # TODO delete existing world file imagery before starting, resume flag on gdal2tilesp.py doesn't work
+    delete_existing_imagery(imagery_dir)
     create_tiles_from_world_file_dir(directory_path)
     delete_blank_tiles(imagery_dir)
-    add_imagery(imagery_dir)
+    track_new_imagery(imagery_dir)
+
+
+def delete_existing_imagery(imagery_dir="world_file"):
+    """
+    Deletes all the imagery in the given directory, mostly necessary because resuming tile splitting doesn't work in
+    gdal2tilesp.py. This is a little unsafe because if the imagery was tracked in the database and the source imagery
+    is deleted, inference can get confused.
+
+    :param imagery_dir: directory of tiles to delete and stop tracking
+    """
+    print("Deleting existing tiles in {}".format(imagery_dir))
+    start_time = time.time()
+    shutil.rmtree(os.path.join("data", "imagery", imagery_dir))
+    print("Finished deleting imagery in {} in {} seconds".format(imagery_dir, time.time() - start_time))
 
 
 def create_tiles_from_world_file_dir(directory_path):
@@ -231,7 +246,7 @@ def delete_blank_tiles(imagery_dir="world_file", extensions=None):
     print("Finished deleting blank tile imagery in {} seconds".format(time.time()-start_time))
 
 
-def add_imagery(imagery_dir="world_file", extensions=None):
+def track_new_imagery(imagery_dir="world_file", extensions=None):
     """
     Adds all tiles to the database in the given imagery_dir
 
