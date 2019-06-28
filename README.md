@@ -2,8 +2,11 @@
 
 ![image](https://i.imgur.com/zahiUaU.png)
 
-This is a project containing scripts I'm using to manipulate data having to do with finding solar panels with machine learning and adding their locations to OpenStreetMap.
+This project contains scripts used to manipulate data having to do with finding solar panels with machine learning and adding their locations to OpenStreetMap; as part of the efforts around [OpenClimateFix](https://openclimatefix.github.io/)
 
+You can see the results of the whole process via the [MapRoulette project](https://maproulette.org/project/3749/leaderboard)
+
+## Design
 I've chosen to use SQLite and SQLAlchemy for persisting the search locations and panel confidences, just so the process can be restartable, rapidly prototypeable, and doesn't need to be hosted (so other people can pick up the torch where I may leave off). In the future, if this needs to be turned into a long standing service, using SQLAlchemy should hopefully lessen the work required to switch to a more robust RDMS like PostgreSQL or something.
 
 # Quickstart
