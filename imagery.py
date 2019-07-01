@@ -50,7 +50,7 @@ class ImageTile(object):
         """
         if not directory:
             directory = os.path.join(os.getcwd(), 'data', 'imagery', source)
-        filename = os.path.join(str(zoom), str(self.row), str(self.column) +
+        filename = os.path.join(str(zoom), str(self.column), str(self.row) +
                                 '.{ext}'.format(ext=format.lower().replace('jpeg', 'jpg')))
         if not path:
             return filename
@@ -156,6 +156,8 @@ PASTE_COORDINATES = [
 
 MAX_RETRIES = 12  # max wait time with exponential backoff would be ~34 minutes
 
+BLANK_TILE = Image.new('RGB', (TILE_SIDE_LENGTH, TILE_SIDE_LENGTH))
+
 service = Static()
 
 
@@ -182,7 +184,7 @@ def delete_existing_imagery(imagery_dir="world_file"):
     """
     print("Deleting existing tiles in {}".format(imagery_dir))
     start_time = time.time()
-    shutil.rmtree(os.path.join("data", "imagery", imagery_dir))
+    shutil.rmtree(os.path.join("data", "imagery", imagery_dir), ignore_errors=True)
     print("Finished deleting imagery in {} in {} seconds".format(imagery_dir, time.time() - start_time))
 
 
@@ -321,23 +323,40 @@ def gather_and_persist_mapbox_imagery_at_coordinate(slippy_coordinates, final_zo
 
 
 # loads image from disk if possible, otherwise queries an imagery service
-def get_image_for_coordinate(slippy_coordinate):
+def get_image_for_coordinate(slippy_coordinate, source='mapbox', query_missing_polygons=True):
     tile = ImageTile(None, slippy_coordinate)
-    image = tile.load()
+    image = tile.load(source=source)
     if not image:
-        image = gather_and_persist_mapbox_imagery_at_coordinate(slippy_coordinate, final_zoom=FINAL_ZOOM)
+        if query_missing_polygons:
+            image = gather_and_persist_mapbox_imagery_at_coordinate(slippy_coordinate, final_zoom=FINAL_ZOOM)
+        else:
+            image = BLANK_TILE
     return image
+
+
+def polygon_name_to_source(polygon_name):
+    if polygon_name == "world_file":
+        return "world_file"
+    else:
+        return "mapbox"
+
+
+def polygon_name_to_query_missing(polygon_name):
+    if polygon_name == "world_file":
+        return False
+    else:
+        return True
 
 
 # gets a larger image at the specified slippy coordinate by stitching other border tiles together
 # TODO: optimize
 # TODO: there's also some symmetry here that can be exploited but this seems easier for now
-def stitch_image_at_coordinate(slippy_coordinate):
+def stitch_image_at_coordinate(slippy_coordinate, source='mapbox', query_missing_polygons=True):
     images = []
     # gather the images in each direction around the target image
     for column in range(slippy_coordinate[0] - 1, slippy_coordinate[0] + 2):
         for row in range(slippy_coordinate[1] - 1, slippy_coordinate[1] + 2):
-            images.append(get_image_for_coordinate((column, row),))
+            images.append(get_image_for_coordinate((column, row), source, query_missing_polygons))
 
     cropped_images = []
     for image, crop_box in zip(images, CROP_BOXES):
@@ -348,6 +367,7 @@ def stitch_image_at_coordinate(slippy_coordinate):
     return output_image
 
 
-def delete_images(slippy_coordinates):
+def delete_images(slippy_coordinates, polygon_name):
     for coordinate_tuple in slippy_coordinates:
-        ImageTile(None, coordinate_tuple).delete(zoom=coordinate_tuple[2])
+        ImageTile(None, coordinate_tuple).delete(zoom=coordinate_tuple[2],
+                                                 source=polygon_name_to_source(polygon_name=polygon_name))

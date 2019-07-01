@@ -82,7 +82,7 @@ def batch_delete_extra_imagery():
                     tile.has_image = False
                     to_delete.append(tile_tuple)
             solardb.update_tiles(tile_batch)
-            imagery.delete_images(to_delete)
+            imagery.delete_images(to_delete, polygon_name)
             print("Deleted {num} non-solar panel containing imagery tiles for {polygon_name}".format(
                 num=len(to_delete), polygon_name=polygon_name))
             # if no tiles got deleted in the batch it's probably done
@@ -98,34 +98,37 @@ def run_classification(classification_checkpoint, segmentation_checkpoint=None, 
         dirpath_segmentation_checkpoint=segmentation_checkpoint
     )
     avg_tiles_per_sec = 0.0
-    for i in itertools.count(0):
-        if delete_every and i % delete_every == 0:
-            batch_delete_extra_imagery()
-        start_time = time.time()
-        tiles = solardb.query_tile_batch_for_inference()
-        if not tiles:
-            print("No viable coordinates left to run inference on. Either provide more polygons or compute centroid "
-                  "distances. Attempting to detect clusters now.")
-            detect_clusters()
-            break
+    polygon_names = solardb.get_polygon_names()
+    for polygon_name in reversed(sorted(polygon_names)):
+        for i in itertools.count(1):
+            if delete_every and i % delete_every == 0:
+                batch_delete_extra_imagery()
+            start_time = time.time()
+            tiles = solardb.query_tile_batch_for_inference(polygon_name)
+            if not tiles:
+                break
+            for tile in tiles:
+                image = np.array(imagery.stitch_image_at_coordinate(
+                    (tile.column, tile.row), source=imagery.polygon_name_to_source(polygon_name),
+                    query_missing_polygons=imagery.polygon_name_to_query_missing(polygon_name)))
 
-        for tile in tiles:
-            image = np.array(imagery.stitch_image_at_coordinate((tile.column, tile.row)))
+                resized_image = skimage.transform.resize(image, (IMAGE_SIZE, IMAGE_SIZE))
+                if resized_image.shape[2] != 3:
+                    resized_image = resized_image[:, :, 0:3]
+                resized_image = resized_image[None, ...]
 
-            resized_image = skimage.transform.resize(image, (IMAGE_SIZE, IMAGE_SIZE))
-            if resized_image.shape[2] != 3:
-                resized_image = resized_image[:, :, 0:3]
-            resized_image = resized_image[None, ...]
+                tile.panel_softmax = predictor.classify(resized_image)
+                tile.inference_ran = True
+                tile.inference_timestamp = time.time()
 
-            tile.panel_softmax = predictor.classify(resized_image)
-            tile.inference_ran = True
-            tile.inference_timestamp = time.time()
+            solardb.update_tiles(tiles)
 
-        solardb.update_tiles(tiles)
-
-        tiles_per_sec = len(tiles) / (time.time() - start_time)
-        avg_tiles_per_sec = ((avg_tiles_per_sec * i) + tiles_per_sec) / (i + 1)
-        print("{0:.2f} tiles/s | {1:.2f} avg tiles/s".format(tiles_per_sec, avg_tiles_per_sec))
+            tiles_per_sec = len(tiles) / (time.time() - start_time)
+            avg_tiles_per_sec = ((avg_tiles_per_sec * i) + tiles_per_sec) / (i + 1)
+            print("{0:.2f} tiles/s | {1:.2f} avg tiles/s for {2}".format(tiles_per_sec, avg_tiles_per_sec, polygon_name))
+    print("No viable coordinates left to run inference on. Either provide more polygons or compute centroid "
+          "distances. Attempting to detect clusters now.")
+    detect_clusters()
 
 
 DEFAULT_DELETE_EVERY = 100
@@ -140,6 +143,12 @@ if __name__ == '__main__':
                         help='Path to DeepSolar segmentation checkpoint.')
     parser.add_argument('--delete_every', dest='delete_every', default=DEFAULT_DELETE_EVERY,
                         help='Deletes extra imagery every x inference batches, default {}'.format(DEFAULT_DELETE_EVERY))
+    parser.add_argument('--cluster-only', dest='cluster_only', action='store_const', const=True, default=False,
+                        help='Only run clustering')
     args = parser.parse_args()
+
+    if args.cluster_only:
+        detect_clusters()
+        sys.exit(0)
 
     run_classification(args.classification_checkpoint, args.segmentation_checkpoint, delete_every=args.delete_every)
